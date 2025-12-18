@@ -10,6 +10,8 @@ import {
 import type { JobPriority, JobStatus } from '@/types'
 import { Button } from '@/components/ui/button'
 import { QueueRefreshControls } from '@/components/queue-refresh-controls'
+import { JobActions } from '@/components/job-actions'
+import { ProcessQueueButton } from '@/components/process-queue-button'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -46,6 +48,9 @@ export default async function QueuePage({
 
   const ideas = await getIdeas()
   const ideaLookup = new Map(ideas.map((idea) => [idea.id, idea]))
+  
+  // Count queued jobs for the process button
+  const queuedJobsCount = jobs.filter((j) => j.status === 'queued').length
 
   return (
     <div className="p-8 space-y-6">
@@ -54,9 +59,13 @@ export default async function QueuePage({
           <h1 className="text-3xl font-bold">Render Queue</h1>
           <span className="text-sm text-muted-foreground">
             {jobs.length} job{jobs.length === 1 ? '' : 's'} tracked
+            {queuedJobsCount > 0 && ` (${queuedJobsCount} queued)`}
           </span>
         </div>
-        <QueueRefreshControls />
+        <div className="flex items-center gap-4 flex-wrap">
+          <ProcessQueueButton queuedCount={queuedJobsCount} />
+          <QueueRefreshControls />
+        </div>
       </div>
 
       <form className="flex flex-col gap-4 rounded-lg border border-border p-4 md:flex-row md:items-end">
@@ -119,6 +128,7 @@ export default async function QueuePage({
                 <th className="px-4 py-3 text-left">Priority</th>
                 <th className="px-4 py-3 text-left">Created</th>
                 <th className="px-4 py-3 text-left">Output</th>
+                <th className="px-4 py-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-background">
@@ -160,6 +170,9 @@ export default async function QueuePage({
                       ) : (
                         <span className="text-muted-foreground">Pending</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <JobActions jobId={job.id} status={job.status} />
                     </td>
                   </tr>
                 )

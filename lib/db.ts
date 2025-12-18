@@ -445,10 +445,6 @@ export async function createRenderJobsForIdea(
     }
   }
 
-  if (newJobs.length > 0) {
-    await runMockRenderJobs(newJobs.map((job) => job.id))
-  }
-
   return {
     jobsCreated: newJobs.length,
     jobs: newJobs,

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PERSONAS, COUNTRIES, PERSONA_LABELS, COUNTRY_LABELS } from '@/lib/constants'
 import { TiktokSlideEditor } from '@/components/tiktok-slide-editor'
+import { SlideNavigator } from '@/components/slide-navigator'
+import { Layers, List } from 'lucide-react'
 import type { IdeaWithDetails, Persona, Country, SlideLayoutConfig } from '@/types'
 
 const SLIDE_TYPE_OPTIONS = [
@@ -201,6 +203,7 @@ export function IdeaForm({ mode, ideaId, initialIdea }: IdeaFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploadingVariantId, setUploadingVariantId] = useState<string | null>(null)
+  const [slideViewMode, setSlideViewMode] = useState<'navigator' | 'detailed'>('navigator')
 
   const activePersonaData = personas.find((p) => p.persona_type === activePersona)!
 
@@ -689,23 +692,62 @@ export function IdeaForm({ mode, ideaId, initialIdea }: IdeaFormProps) {
 
       {activePersonaData.countries.some((country) => country.selected) && (
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold">Slides & Variants</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Slides & Variants</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant={slideViewMode === 'navigator' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSlideViewMode('navigator')}
+              >
+                <Layers className="h-4 w-4 mr-1" />
+                Navigator
+              </Button>
+              <Button
+                type="button"
+                variant={slideViewMode === 'detailed' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSlideViewMode('detailed')}
+              >
+                <List className="h-4 w-4 mr-1" />
+                Detailed
+              </Button>
+            </div>
+          </div>
           {activePersonaData.countries.map((country) => {
             if (!country.selected) return null
             return (
               <div key={country.country} className="border border-border rounded-lg p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">{COUNTRY_LABELS[country.country]}</h3>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => addSlide(activePersona, country.country)}
-                  >
-                    Add Slide
-                  </Button>
+                  {slideViewMode === 'detailed' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => addSlide(activePersona, country.country)}
+                    >
+                      Add Slide
+                    </Button>
+                  )}
                 </div>
 
-                <div className="space-y-4">
+                {slideViewMode === 'navigator' ? (
+                  <SlideNavigator
+                    slides={country.slides}
+                    persona={activePersona}
+                    country={country.country}
+                    ideaTitle={title || 'untitled'}
+                    onUpdateSlide={(slideId, updater) =>
+                      updateSlide(activePersona, country.country, slideId, updater)
+                    }
+                    onAddSlide={() => addSlide(activePersona, country.country)}
+                    onRemoveSlide={(slideId) => removeSlide(activePersona, country.country, slideId)}
+                    onDuplicateSlide={(slideId) => duplicateSlide(activePersona, country.country, slideId)}
+                  />
+                ) : (
+                  /* Detailed View - Original UI */
+                  <div className="space-y-4">
                   {country.slides.map((slide) => (
                     <div key={slide.id} className="border border-dashed rounded-md p-4 space-y-4">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1024,7 +1066,8 @@ export function IdeaForm({ mode, ideaId, initialIdea }: IdeaFormProps) {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                )}
               </div>
             )
           })}

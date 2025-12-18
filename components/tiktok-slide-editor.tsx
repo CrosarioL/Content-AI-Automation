@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Stage, Layer, Rect, Text as KonvaText, Transformer, Line, Group } from 'react-konva'
+import { Stage, Layer, Rect, Text as KonvaText, Transformer, Line, Group, Image as KonvaImage } from 'react-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { toPng } from 'html-to-image'
 import {
@@ -10,6 +10,7 @@ import {
   AlignRight,
   Copy,
   Download,
+  ImageIcon,
   MoveDown,
   MoveUp,
   Plus,
@@ -17,9 +18,35 @@ import {
   Trash2,
   Undo2,
   Sparkles,
+  X,
 } from 'lucide-react'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
 import { Button } from '@/components/ui/button'
+
+// Hook to load image for Konva
+function useKonvaImage(url: string | undefined) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null)
+  
+  useEffect(() => {
+    if (!url) {
+      setImage(null)
+      return
+    }
+    
+    const img = new window.Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => setImage(img)
+    img.onerror = () => setImage(null)
+    img.src = url
+    
+    return () => {
+      img.onload = null
+      img.onerror = null
+    }
+  }, [url])
+  
+  return image
+}
 
 const CANVAS_WIDTH = 1080
 const CANVAS_HEIGHT = 1920
@@ -97,12 +124,17 @@ export function TiktokSlideEditor({
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
     normalizedLayout.layers.at(-1)?.id ?? null
   )
+  const [isUploadingBg, setIsUploadingBg] = useState(false)
   const downloadRef = useRef<HTMLDivElement>(null)
   const transformerRef = useRef<any>(null)
   const layerRefs = useRef<Record<string, any>>({})
   const historyRef = useRef<SlideLayoutConfig[]>([normalizedLayout])
   const historyIndexRef = useRef(0)
   const variantRef = useRef(variantId)
+  const bgInputRef = useRef<HTMLInputElement>(null)
+  
+  // Load background image for Konva canvas
+  const backgroundImage = useKonvaImage(layout.background?.image)
 
   useEffect(() => {
     const variantChanged = variantRef.current !== variantId
@@ -323,6 +355,61 @@ export function TiktokSlideEditor({
     }
   }
 
+  const handleBackgroundUpload = async (file: File | null) => {
+    if (!file) return
+    setIsUploadingBg(true)
+    
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('ideaId', variantId)
+      formData.append('type', 'background')
+      
+      const response = await fetch('/api/uploads', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to upload background')
+      }
+      
+      const data = await response.json()
+      commitLayout((prev) => ({
+        ...prev,
+        background: {
+          ...prev.background,
+          image: data.url,
+        },
+      }))
+    } catch (err) {
+      console.error('Background upload failed:', err)
+    } finally {
+      setIsUploadingBg(false)
+    }
+  }
+
+  const removeBackgroundImage = () => {
+    commitLayout((prev) => ({
+      ...prev,
+      background: {
+        ...prev.background,
+        image: undefined,
+      },
+    }))
+  }
+
+  const updateBackgroundColor = (color: string) => {
+    commitLayout((prev) => ({
+      ...prev,
+      background: {
+        ...prev.background,
+        color,
+      },
+    }))
+  }
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -380,6 +467,14 @@ export function TiktokSlideEditor({
                   height={VIEWPORT_HEIGHT}
                   fill={layout.background?.color || '#0F1A2C'}
                 />
+                {backgroundImage && (
+                  <KonvaImage
+                    image={backgroundImage}
+                    width={VIEWPORT_WIDTH}
+                    height={VIEWPORT_HEIGHT}
+                    opacity={0.9}
+                  />
+                )}
                 <Rect
                   y={layout.safeZone.top * SCALE}
                   width={VIEWPORT_WIDTH}
@@ -483,6 +578,59 @@ export function TiktokSlideEditor({
             <Button size="sm" variant="ghost" onClick={syncScriptFromLayers}>
               <Sparkles className="mr-1 h-4 w-4" /> Sync Script
             </Button>
+          </div>
+
+          {/* Background Controls */}
+          <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Background</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Color:</span>
+                <input
+                  type="color"
+                  value={layout.background?.color || '#0F1A2C'}
+                  onChange={(e) => updateBackgroundColor(e.target.value)}
+                  className="h-8 w-12 cursor-pointer rounded border border-border"
+                />
+              </label>
+              
+              <div className="flex items-center gap-2">
+                <input
+                  ref={bgInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleBackgroundUpload(e.target.files?.[0] || null)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => bgInputRef.current?.click()}
+                  disabled={isUploadingBg}
+                >
+                  <ImageIcon className="mr-1.5 h-4 w-4" />
+                  {isUploadingBg ? 'Uploading...' : layout.background?.image ? 'Change Image' : 'Add Image'}
+                </Button>
+                {layout.background?.image && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={removeBackgroundImage}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              
+              {layout.background?.image && (
+                <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                  Image set
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
