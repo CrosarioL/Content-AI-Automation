@@ -4,10 +4,12 @@
  */
 import type { SlideLayoutConfig } from '@/types'
 
+// Matches the shape stored on PostChoices.slides. We keep runtime values 1 or 2,
+// but allow plain number here so TS doesn't complain when reading from DB.
 export interface SlideChoice {
   slide_number: number
   image_id?: string
-  text_variant_index: 1 | 2
+  text_variant_index: number
 }
 
 /** Build effective slide choices: all slides from persona, with stored choices when available */
