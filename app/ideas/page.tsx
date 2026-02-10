@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function IdeasPage() {
-  let ideas = []
-  let error = null
+  let ideas: Awaited<ReturnType<typeof getIdeas>> = []
+  let error: string | null = null
 
   console.log('[IdeasPage] Server component rendering...')
   

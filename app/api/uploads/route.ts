@@ -14,12 +14,19 @@ export async function POST(request: NextRequest) {
 
     const ideaId = (formData.get('ideaId') as string) || 'global'
     const persona = (formData.get('persona') as string) || 'persona'
-    const country = (formData.get('country') as string) || 'country'
     const slideId = (formData.get('slide') as string) || 'slide'
-    const variantId = (formData.get('variant') as string) || 'variant'
+    const slot = (formData.get('slot') as string) || 'generic'
+    // For backward compatibility
+    const country = (formData.get('country') as string) || ''
+    const variantId = (formData.get('variant') as string) || ''
 
     const sanitizedName = file.name.replace(/\s+/g, '-').toLowerCase()
-    const objectPath = `${ideaId}/${persona}/${country}/${slideId}/${variantId}-${Date.now()}-${sanitizedName}`
+    
+    // v2 path structure: ideaId/persona/slide/slot-timestamp-filename
+    // v1 path structure: ideaId/persona/country/slide/variant-timestamp-filename
+    const objectPath = country
+      ? `${ideaId}/${persona}/${country}/${slideId}/${variantId}-${Date.now()}-${sanitizedName}`
+      : `${ideaId}/${persona}/${slideId}/${slot}-${Date.now()}-${sanitizedName}`
 
     const { error: uploadError } = await supabaseServer.storage
       .from(DEFAULT_BUCKET)

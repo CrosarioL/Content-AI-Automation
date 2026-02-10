@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
-import { IdeaForm } from '@/components/idea-form'
+import { IdeaFormV2 } from '@/components/idea-form-v2'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -18,10 +18,10 @@ export default function NewIdeaPage() {
         </Link>
       </div>
 
-      <div className="max-w-4xl">
+      <div className="max-w-6xl">
         <h1 className="text-3xl font-bold mb-6">New Idea</h1>
 
-        <IdeaForm mode="create" />
+        <IdeaFormV2 mode="create" />
       </div>
     </div>
   )

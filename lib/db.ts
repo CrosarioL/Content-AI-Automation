@@ -8,6 +8,17 @@ import type {
   JobPriority,
   JobStatus,
   SlideLayoutConfig,
+  PostInstance,
+  PostStatus,
+  PostChoices,
+  PersonaSlide,
+  SlideImagePool,
+  SlideTextPool,
+  Persona,
+  Country,
+  PersonaSlideWithPools,
+  PersonaVariantV2,
+  IdeaWithDetailsV2,
 } from '@/types'
 
 // Get default template ID (from database.sql)
@@ -588,6 +599,386 @@ async function fetchSlideVariants<T>(
       return []
     }
     throw err
+  }
+}
+
+// ============================================
+// Mass Poster v2 Database Functions
+// ============================================
+
+// --- Post Instances ---
+
+export async function createPostInstance(data: {
+  idea_id: string
+  persona_type: Persona
+  country: Country
+  post_index: number
+  seed: string
+  combo_key: string
+  choices: PostChoices
+}): Promise<PostInstance> {
+  const { data: post, error } = await supabaseServer
+    .from('post_instances')
+    .insert({
+      idea_id: data.idea_id,
+      persona_type: data.persona_type,
+      country: data.country,
+      post_index: data.post_index,
+      seed: data.seed,
+      combo_key: data.combo_key,
+      choices: data.choices,
+      status: 'queued',
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return post as PostInstance
+}
+
+export async function getPostInstances(filters?: {
+  ideaId?: string
+  persona?: Persona
+  country?: Country
+  status?: PostStatus
+}): Promise<PostInstance[]> {
+  try {
+    let query = supabaseServer
+      .from('post_instances')
+      .select('*')
+      .order('country')
+      .order('post_index')
+
+    if (filters?.ideaId) query = query.eq('idea_id', filters.ideaId)
+    if (filters?.persona) query = query.eq('persona_type', filters.persona)
+    if (filters?.country) query = query.eq('country', filters.country)
+    if (filters?.status) query = query.eq('status', filters.status)
+
+    const { data, error } = await query
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('does not exist')) {
+        return []
+      }
+      throw error
+    }
+    return (data || []) as PostInstance[]
+  } catch (err: any) {
+    console.warn('[getPostInstances] Error:', err.message)
+    return []
+  }
+}
+
+export async function getPostInstanceById(id: string): Promise<PostInstance | null> {
+  const { data, error } = await supabaseServer
+    .from('post_instances')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    throw error
+  }
+  return data as PostInstance
+}
+
+export async function updatePostInstanceStatus(
+  id: string,
+  status: PostStatus,
+  options?: { outputUrl?: string; errorMessage?: string }
+): Promise<PostInstance> {
+  const payload: Record<string, any> = { status }
+  if (options?.outputUrl !== undefined) payload.output_url = options.outputUrl
+  if (options?.errorMessage !== undefined) payload.error_message = options.errorMessage
+
+  const { data, error } = await supabaseServer
+    .from('post_instances')
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as PostInstance
+}
+
+export async function deletePostInstancesForIdea(
+  ideaId: string,
+  filters?: { persona?: Persona; country?: Country }
+): Promise<{ deleted: number }> {
+  let query = supabaseServer
+    .from('post_instances')
+    .delete()
+    .eq('idea_id', ideaId)
+
+  if (filters?.persona) query = query.eq('persona_type', filters.persona)
+  if (filters?.country) query = query.eq('country', filters.country)
+
+  const { error, count } = await query.select('id')
+  if (error) throw error
+  return { deleted: count || 0 }
+}
+
+export async function getExistingComboKeys(
+  ideaId: string,
+  persona: Persona,
+  country: Country
+): Promise<Set<string>> {
+  const { data, error } = await supabaseServer
+    .from('post_instances')
+    .select('combo_key')
+    .eq('idea_id', ideaId)
+    .eq('persona_type', persona)
+    .eq('country', country)
+
+  if (error) throw error
+  return new Set((data || []).map((d) => d.combo_key))
+}
+
+export async function getExistingPostIndexes(
+  ideaId: string,
+  persona: Persona,
+  country: Country
+): Promise<Set<number>> {
+  const { data, error } = await supabaseServer
+    .from('post_instances')
+    .select('post_index')
+    .eq('idea_id', ideaId)
+    .eq('persona_type', persona)
+    .eq('country', country)
+
+  if (error) throw error
+  return new Set((data || []).map((d) => d.post_index))
+}
+
+// --- Persona Slides (v2) ---
+
+export async function createPersonaSlide(data: {
+  persona_variant_id: string
+  slide_number: number
+  slide_type: string
+  title?: string
+  notes?: string
+}): Promise<PersonaSlide> {
+  const { data: slide, error } = await supabaseServer
+    .from('persona_slides')
+    .insert(data)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return slide as PersonaSlide
+}
+
+export async function getPersonaSlidesForPersona(
+  personaVariantId: string
+): Promise<PersonaSlide[]> {
+  try {
+    const { data, error } = await supabaseServer
+      .from('persona_slides')
+      .select('*')
+      .eq('persona_variant_id', personaVariantId)
+      .order('slide_number')
+
+    if (error) {
+      // Table might not exist yet
+      if (error.code === 'PGRST204' || error.message?.includes('does not exist')) {
+        console.warn('[getPersonaSlidesForPersona] Table not ready, returning empty')
+        return []
+      }
+      throw error
+    }
+    return (data || []) as PersonaSlide[]
+  } catch (err: any) {
+    console.warn('[getPersonaSlidesForPersona] Error:', err.message)
+    return []
+  }
+}
+
+export async function deletePersonaSlidesForPersona(
+  personaVariantId: string
+): Promise<void> {
+  const { error } = await supabaseServer
+    .from('persona_slides')
+    .delete()
+    .eq('persona_variant_id', personaVariantId)
+
+  if (error) throw error
+}
+
+// --- Slide Image Pools ---
+
+export async function createSlideImagePool(data: {
+  persona_slide_id: string
+  slot: string
+  storage_path: string
+  variant_label?: string
+  caption?: string
+  aspect_ratio?: string
+  metadata?: Record<string, any>
+  sort_order?: number
+}): Promise<SlideImagePool> {
+  const { data: img, error } = await supabaseServer
+    .from('slide_image_pools')
+    .insert({
+      ...data,
+      sort_order: data.sort_order || 0,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return img as SlideImagePool
+}
+
+export async function getSlideImagePools(
+  personaSlideId: string
+): Promise<SlideImagePool[]> {
+  try {
+    const { data, error } = await supabaseServer
+      .from('slide_image_pools')
+      .select('*')
+      .eq('persona_slide_id', personaSlideId)
+      .order('sort_order')
+
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('does not exist')) {
+        return []
+      }
+      throw error
+    }
+    return (data || []) as SlideImagePool[]
+  } catch (err: any) {
+    console.warn('[getSlideImagePools] Error:', err.message)
+    return []
+  }
+}
+
+export async function deleteSlideImagePool(id: string): Promise<void> {
+  const { error } = await supabaseServer
+    .from('slide_image_pools')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+// --- Slide Text Pools ---
+
+export async function upsertSlideTextPool(data: {
+  persona_slide_id: string
+  country: Country
+  variant_index: number
+  content: string
+  layout_config?: SlideLayoutConfig
+}): Promise<SlideTextPool> {
+  const { data: text, error } = await supabaseServer
+    .from('slide_text_pools')
+    .upsert(
+      {
+        persona_slide_id: data.persona_slide_id,
+        country: data.country,
+        variant_index: data.variant_index,
+        content: data.content,
+        layout_config: data.layout_config || {},
+      },
+      {
+        onConflict: 'persona_slide_id,country,variant_index',
+      }
+    )
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return text as SlideTextPool
+}
+
+export async function getSlideTextPools(
+  personaSlideId: string
+): Promise<SlideTextPool[]> {
+  try {
+    const { data, error } = await supabaseServer
+      .from('slide_text_pools')
+      .select('*')
+      .eq('persona_slide_id', personaSlideId)
+      .order('country')
+      .order('variant_index')
+
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('does not exist')) {
+        return []
+      }
+      throw error
+    }
+    return (data || []) as SlideTextPool[]
+  } catch (err: any) {
+    console.warn('[getSlideTextPools] Error:', err.message)
+    return []
+  }
+}
+
+export async function getSlideTextPoolsForCountry(
+  personaSlideId: string,
+  country: Country
+): Promise<SlideTextPool[]> {
+  const { data, error } = await supabaseServer
+    .from('slide_text_pools')
+    .select('*')
+    .eq('persona_slide_id', personaSlideId)
+    .eq('country', country)
+    .order('variant_index')
+
+  if (error) throw error
+  return (data || []) as SlideTextPool[]
+}
+
+// --- Get full idea with v2 structure ---
+
+export async function getIdeaWithDetailsV2(ideaId: string): Promise<IdeaWithDetailsV2 | null> {
+  // Get idea
+  const idea = await getIdeaById(ideaId)
+  if (!idea) return null
+
+  // Get persona variants
+  const { data: personas, error: personaError } = await supabaseServer
+    .from('persona_variants')
+    .select('*')
+    .eq('idea_id', ideaId)
+
+  if (personaError) throw personaError
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const bucket = process.env.SLIDE_ASSETS_BUCKET || process.env.NEXT_PUBLIC_SLIDE_ASSETS_BUCKET || 'slide-assets'
+
+  const addPublicUrls = (img: SlideImagePool) => {
+    if (img.metadata?.publicUrl) return img
+    if (supabaseUrl && img.storage_path) {
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${img.storage_path}`
+      return { ...img, metadata: { ...img.metadata, publicUrl } }
+    }
+    return img
+  }
+
+  const personasWithSlides: PersonaVariantV2[] = await Promise.all(
+    (personas || []).map(async (persona) => {
+      const slides = await getPersonaSlidesForPersona(persona.id)
+      const slidesWithPools: PersonaSlideWithPools[] = await Promise.all(
+        slides.map(async (slide) => {
+          const [imagePoolsRaw, textPools] = await Promise.all([
+            getSlideImagePools(slide.id),
+            getSlideTextPools(slide.id),
+          ])
+          const imagePools = imagePoolsRaw.map(addPublicUrls)
+          return { ...slide, image_pools: imagePools, text_pools: textPools }
+        })
+      )
+      return { ...persona, slides: slidesWithPools }
+    })
+  )
+
+  return {
+    ...idea,
+    personas: personasWithSlides,
   }
 }
 

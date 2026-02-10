@@ -1,0 +1,197 @@
+'use client'
+
+/**
+ * Renders a single slide with Konva at full resolution (1080x1920).
+ * Same visual output as the editor – used for export so "what you see is what you get".
+ * Uses per-line background rects (TikTok-style) instead of one full-width box.
+ */
+import { useRef, useEffect, useState, useMemo } from 'react'
+import { Stage, Layer, Rect, Text as KonvaText, Group, Image as KonvaImage } from 'react-konva'
+import type Konva from 'konva'
+import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
+import { measureTextLines } from '@/lib/text-line-metrics'
+
+const CANVAS_WIDTH = 1080
+const CANVAS_HEIGHT = 1920
+
+function useKonvaImage(url: string | undefined) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null)
+  useEffect(() => {
+    if (!url) {
+      setImage(null)
+      return
+    }
+    const img = new window.Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => setImage(img)
+    img.onerror = () => setImage(null)
+    img.src = url
+    return () => {
+      img.onload = null
+      img.onerror = null
+    }
+  }, [url])
+  return image
+}
+
+export interface SlideExportCanvasProps {
+  layout: SlideLayoutConfig
+  backgroundImageUrl?: string
+  stageRef?: React.RefObject<Konva.Stage | null>
+  /** Called when the slide is ready to export (e.g. background image loaded) */
+  onReady?: () => void
+}
+
+export function SlideExportCanvas({
+  layout,
+  backgroundImageUrl,
+  stageRef: externalStageRef,
+  onReady,
+}: SlideExportCanvasProps) {
+  const internalStageRef = useRef<Konva.Stage>(null)
+  const stageRef = externalStageRef ?? internalStageRef
+  const backgroundImage = useKonvaImage(backgroundImageUrl)
+  const [readyFired, setReadyFired] = useState(false)
+
+  const bgColor = layout.background?.color || '#0F1A2C'
+  const layers = [...(layout.layers || [])].sort((a, b) => a.zIndex - b.zIndex)
+
+  const measureCtx = useMemo(() => {
+    if (typeof document === 'undefined') return null
+    const canvas = document.createElement('canvas')
+    return canvas.getContext('2d')
+  }, [])
+
+  const lineMetricsByLayer = useMemo(() => {
+    const map = new Map<string, Array<{ text: string; width: number; y: number }>>()
+    if (!measureCtx) return map
+    for (const layer of layers) {
+      const hasBackground = layer.background && layer.background !== 'transparent'
+      const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+      const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
+      if (!hasBackground) continue
+      const metrics = measureTextLines(measureCtx, {
+        text,
+        wrapWidth,
+        fontSize: layer.fontSize ?? 60,
+        fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter',
+        fontWeight: layer.fontWeight || '500',
+        lineHeight: layer.lineHeight ?? 1.2,
+      })
+      map.set(layer.id, metrics)
+    }
+    return map
+  }, [measureCtx, layers])
+
+  useEffect(() => {
+    if (readyFired || !onReady) return
+    if (!backgroundImageUrl || backgroundImage) {
+      setReadyFired(true)
+      onReady()
+    }
+  }, [backgroundImageUrl, backgroundImage, onReady, readyFired])
+
+  return (
+    <Stage
+      ref={stageRef as React.RefObject<Konva.Stage>}
+      width={CANVAS_WIDTH}
+      height={CANVAS_HEIGHT}
+    >
+      <Layer>
+        <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill={bgColor} />
+        {backgroundImageUrl && backgroundImage && (
+          <KonvaImage
+            image={backgroundImage}
+            x={0}
+            y={0}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            listening={false}
+          />
+        )}
+      </Layer>
+      <Layer>
+        {layers.map((layer: SlideTextLayer) => {
+          const scaleX = layer.scale?.x ?? 1
+          const scaleY = layer.scale?.y ?? 1
+          const hasBackground = layer.background && layer.background !== 'transparent'
+          const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+          const pad = 18
+          const fontSize = layer.fontSize ?? 60
+          const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
+          const lineHeight = layer.lineHeight ?? 1.2
+          const lineHeightPx = fontSize * lineHeight
+          const textTopOffset = fontSize * 0.05
+          const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
+          const align = layer.align || 'center'
+          const blockWidth = layer.size?.width ?? wrapWidth
+
+          return (
+            <Group
+              key={layer.id}
+              x={layer.position.x}
+              y={layer.position.y}
+              scaleX={scaleX}
+              scaleY={scaleY}
+              rotation={layer.rotation ?? 0}
+              opacity={layer.opacity ?? 1}
+              listening={false}
+            >
+              {hasBackground && (lineMetrics.length > 0 ? lineMetrics.map((metric, i) => {
+                const rectWidth = metric.width + pad * 2
+                let rectX: number
+                if (align === 'center') {
+                  rectX = -rectWidth / 2
+                } else if (align === 'right') {
+                  rectX = blockWidth / 2 - rectWidth
+                } else {
+                  rectX = -blockWidth / 2 - pad
+                }
+                return (
+                  <Rect
+                    key={i}
+                    x={rectX}
+                    y={-textTopOffset + metric.y - pad}
+                    width={rectWidth}
+                    height={lineHeightPx + pad * 2}
+                    fill={layer.background}
+                    cornerRadius={8}
+                    listening={false}
+                  />
+                )
+              }) : (
+                <Rect
+                  x={-blockWidth / 2 - pad}
+                  y={-textTopOffset - pad}
+                  width={blockWidth + pad * 2}
+                  height={(layer.size?.height ?? fontSize * 3) + pad * 2}
+                  fill={layer.background}
+                  cornerRadius={10}
+                  listening={false}
+                />
+              ))}
+              <KonvaText
+                text={text}
+                x={-blockWidth / 2}
+                y={-textTopOffset}
+                width={blockWidth}
+                fontSize={fontSize}
+                fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
+                fontStyle={layer.fontWeight || '500'}
+                fill={layer.color || '#ffffff'}
+                align={align}
+                wrap="word"
+                stroke={layer.strokeColor || 'transparent'}
+                strokeWidth={layer.strokeWidth ?? 0}
+                fillAfterStrokeEnabled
+                lineHeight={lineHeight}
+                letterSpacing={layer.letterSpacing ?? 0}
+                listening={false}
+              />
+            </Group>
+          )
+        })}
+      </Layer>
+    </Stage>
+  )
+}

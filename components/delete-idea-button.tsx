@@ -61,10 +61,11 @@ export function DeleteIdeaButton({ ideaId, ideaTitle, onDelete }: DeleteIdeaButt
           Delete &quot;{ideaTitle}&quot;?
         </span>
         <Button
-          variant="destructive"
+          variant="outline"
           size="sm"
           onClick={handleDelete}
           disabled={isDeleting}
+          className="border-red-500 text-red-600 hover:bg-red-500/10"
         >
           {isDeleting ? 'Deleting...' : 'Confirm'}
         </Button>
@@ -82,10 +83,11 @@ export function DeleteIdeaButton({ ideaId, ideaTitle, onDelete }: DeleteIdeaButt
 
   return (
     <Button
-      variant="destructive"
+      variant="outline"
       size="sm"
       onClick={handleDelete}
       disabled={isDeleting}
+      className="border-red-500 text-red-600 hover:bg-red-500/10"
     >
       <Trash2 className="h-4 w-4 mr-2" />
       Delete

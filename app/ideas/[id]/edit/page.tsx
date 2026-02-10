@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
-import { IdeaForm } from '@/components/idea-form'
-import { getIdeaWithDetails } from '@/lib/db'
+import { IdeaFormV2 } from '@/components/idea-form-v2'
+import { getIdeaWithDetailsV2 } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -11,7 +11,7 @@ export const revalidate = 0
 export default async function EditIdeaPage({ params }: { params: { id: string } }) {
   let idea
   try {
-    idea = await getIdeaWithDetails(params.id)
+    idea = await getIdeaWithDetailsV2(params.id)
   } catch (error) {
     console.error('Failed to load idea for editing', error)
     idea = null
@@ -32,9 +32,9 @@ export default async function EditIdeaPage({ params }: { params: { id: string } 
         </Link>
       </div>
 
-      <div className="max-w-4xl">
+      <div className="max-w-6xl">
         <h1 className="text-3xl font-bold mb-6">Edit Idea</h1>
-        <IdeaForm mode="edit" ideaId={params.id} initialIdea={idea} />
+        <IdeaFormV2 mode="edit" ideaId={params.id} initialIdea={idea} />
       </div>
     </div>
   )

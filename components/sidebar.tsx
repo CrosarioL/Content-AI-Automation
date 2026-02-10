@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Lightbulb, ListTodo, Image as ImageIcon } from 'lucide-react'
+import { Lightbulb, ListTodo, Image as ImageIcon, Grid3X3, FileArchive } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
   { name: 'Ideas', href: '/ideas', icon: Lightbulb },
+  { name: 'Posts', href: '/posts', icon: Grid3X3 },
   { name: 'Queue', href: '/queue', icon: ListTodo },
   { name: 'Assets', href: '/assets', icon: ImageIcon },
 ]
