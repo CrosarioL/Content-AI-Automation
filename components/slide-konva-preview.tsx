@@ -12,6 +12,37 @@ import { measureTextLines } from '@/lib/text-line-metrics'
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
 
+function getBackgroundImageLayout(
+  image: HTMLImageElement | null,
+  canvasWidth: number,
+  canvasHeight: number,
+  transform?: { scale?: number; x?: number; y?: number }
+) {
+  if (!image) {
+    return null
+  }
+
+  const imgW = image.width || canvasWidth
+  const imgH = image.height || canvasHeight
+
+  // Base "cover" scale – fill canvas without distortion, then crop overflow
+  const scaleBase = Math.max(canvasWidth / imgW, canvasHeight / imgH)
+  const userScale = transform?.scale ?? 1
+  const finalScale = scaleBase * userScale
+
+  const renderWidth = imgW * finalScale
+  const renderHeight = imgH * finalScale
+
+  // Center image, then apply user pan offsets in pixels
+  const offsetX = transform?.x ?? 0
+  const offsetY = transform?.y ?? 0
+
+  const x = (canvasWidth - renderWidth) / 2 + offsetX
+  const y = (canvasHeight - renderHeight) / 2 + offsetY
+
+  return { x, y, width: renderWidth, height: renderHeight }
+}
+
 function useKonvaImage(url: string | undefined) {
   const [image, setImage] = React.useState<HTMLImageElement | null>(null)
   React.useEffect(() => {
@@ -67,6 +98,11 @@ export function SlideKonvaPreview({
   const CANVAS_WIDTH = layout.canvas?.width ?? DEFAULT_WIDTH
   const CANVAS_HEIGHT = layout.canvas?.height ?? DEFAULT_HEIGHT
 
+  const bgLayout = useMemo(
+    () => getBackgroundImageLayout(backgroundImage, CANVAS_WIDTH, CANVAS_HEIGHT, imageTransform),
+    [backgroundImage, CANVAS_WIDTH, CANVAS_HEIGHT, imageTransform]
+  )
+
   const measureCtx = useMemo(() => {
     if (typeof document === 'undefined') return null
     const canvas = document.createElement('canvas')
@@ -121,13 +157,13 @@ export function SlideKonvaPreview({
         <Stage width={CANVAS_WIDTH} height={CANVAS_HEIGHT} listening={!isEditor}>
           <Layer listening={false}>
             <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill={bgColor} />
-            {bgImageUrl && backgroundImage && (
+            {bgImageUrl && backgroundImage && bgLayout && (
               <KonvaImage
                 image={backgroundImage}
-                x={0}
-                y={0}
-                width={CANVAS_WIDTH}
-                height={CANVAS_HEIGHT}
+                x={bgLayout.x}
+                y={bgLayout.y}
+                width={bgLayout.width}
+                height={bgLayout.height}
                 listening={false}
               />
             )}

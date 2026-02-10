@@ -11,8 +11,8 @@ import type Konva from 'konva'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
 import { measureTextLines } from '@/lib/text-line-metrics'
 
-const CANVAS_WIDTH = 1080
-const CANVAS_HEIGHT = 1920
+const DEFAULT_WIDTH = 1080
+const DEFAULT_HEIGHT = 1920
 
 function useKonvaImage(url: string | undefined) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
@@ -34,6 +34,29 @@ function useKonvaImage(url: string | undefined) {
   return image
 }
 
+function getBackgroundImageLayout(
+  image: HTMLImageElement | null,
+  canvasWidth: number,
+  canvasHeight: number
+) {
+  if (!image) return null
+
+  const imgW = image.width || canvasWidth
+  const imgH = image.height || canvasHeight
+
+  // "cover" behavior: fill canvas without distortion, crop overflow
+  const scaleBase = Math.max(canvasWidth / imgW, canvasHeight / imgH)
+  const finalScale = scaleBase
+
+  const renderWidth = imgW * finalScale
+  const renderHeight = imgH * finalScale
+
+  const x = (canvasWidth - renderWidth) / 2
+  const y = (canvasHeight - renderHeight) / 2
+
+  return { x, y, width: renderWidth, height: renderHeight }
+}
+
 export interface SlideExportCanvasProps {
   layout: SlideLayoutConfig
   backgroundImageUrl?: string
@@ -51,10 +74,17 @@ export function SlideExportCanvas({
   const internalStageRef = useRef<Konva.Stage>(null)
   const stageRef = externalStageRef ?? internalStageRef
   const backgroundImage = useKonvaImage(backgroundImageUrl)
+  const CANVAS_WIDTH = layout.canvas?.width ?? DEFAULT_WIDTH
+  const CANVAS_HEIGHT = layout.canvas?.height ?? DEFAULT_HEIGHT
   const [readyFired, setReadyFired] = useState(false)
 
   const bgColor = layout.background?.color || '#0F1A2C'
   const layers = [...(layout.layers || [])].sort((a, b) => a.zIndex - b.zIndex)
+
+  const bgLayout = useMemo(
+    () => getBackgroundImageLayout(backgroundImage, CANVAS_WIDTH, CANVAS_HEIGHT),
+    [backgroundImage, CANVAS_WIDTH, CANVAS_HEIGHT]
+  )
 
   const measureCtx = useMemo(() => {
     if (typeof document === 'undefined') return null
@@ -99,13 +129,13 @@ export function SlideExportCanvas({
     >
       <Layer>
         <Rect x={0} y={0} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill={bgColor} />
-        {backgroundImageUrl && backgroundImage && (
+        {backgroundImageUrl && backgroundImage && bgLayout && (
           <KonvaImage
             image={backgroundImage}
-            x={0}
-            y={0}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
+            x={bgLayout.x}
+            y={bgLayout.y}
+            width={bgLayout.width}
+            height={bgLayout.height}
             listening={false}
           />
         )}

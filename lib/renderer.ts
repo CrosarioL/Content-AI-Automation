@@ -10,8 +10,8 @@ import { supabaseServer } from './supabase'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
 import { measureTextLines } from './text-line-metrics'
 
-const CANVAS_WIDTH = 1080
-const CANVAS_HEIGHT = 1920
+const DEFAULT_WIDTH = 1080
+const DEFAULT_HEIGHT = 1920
 
 // ── Font registration (run once) ──────────────────────────────────────────────
 // node-canvas has broken variable font + weight support. Use static fonts only,
@@ -89,6 +89,8 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
 async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> {
   const bgColor = layout.background?.color || '#0F1A2C'
   const layers = [...(layout.layers || [])].sort((a, b) => a.zIndex - b.zIndex)
+  const CANVAS_WIDTH = layout.canvas?.width ?? DEFAULT_WIDTH
+  const CANVAS_HEIGHT = layout.canvas?.height ?? DEFAULT_HEIGHT
 
   // Create stage (no container needed on Node.js)
   const stage = new Konva.Stage({
@@ -111,9 +113,21 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
       const imgBuf = await fetchImageBuffer(bgImageUrl)
       if (imgBuf) {
         const canvasImg = await loadImage(imgBuf)
+
+        // Preserve aspect ratio: cover canvas and crop overflow (no stretching)
+        const imgW = (canvasImg as any).width || CANVAS_WIDTH
+        const imgH = (canvasImg as any).height || CANVAS_HEIGHT
+        const scaleBase = Math.max(CANVAS_WIDTH / imgW, CANVAS_HEIGHT / imgH)
+        const renderWidth = imgW * scaleBase
+        const renderHeight = imgH * scaleBase
+        const x = (CANVAS_WIDTH - renderWidth) / 2
+        const y = (CANVAS_HEIGHT - renderHeight) / 2
+
         const img = new Konva.Image({
-          x: 0, y: 0,
-          width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
+          x,
+          y,
+          width: renderWidth,
+          height: renderHeight,
           image: canvasImg as any,
         })
         bgLayer.add(img)

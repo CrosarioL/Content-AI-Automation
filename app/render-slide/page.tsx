@@ -11,9 +11,6 @@ import { useMemo, useState, useEffect, useRef } from 'react'
 import { SlideExportCanvas } from '@/components/slide-export-canvas'
 import type { SlideLayoutConfig } from '@/types'
 
-const CANVAS_WIDTH = 1080
-const CANVAS_HEIGHT = 1920
-
 function base64ToUtf8(b64: string): string {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
@@ -51,8 +48,8 @@ export default function RenderSlidePage() {
     return (
       <div
         style={{
-          width: CANVAS_WIDTH,
-          height: CANVAS_HEIGHT,
+          width: layout?.canvas?.width ?? 1080,
+          height: layout?.canvas?.height ?? 1920,
           background: '#0F1A2C',
           display: 'flex',
           alignItems: 'center',
@@ -66,8 +63,8 @@ export default function RenderSlidePage() {
     <div
       ref={containerRef}
       style={{
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
+        width: layout.canvas.width,
+        height: layout.canvas.height,
         margin: 0,
         padding: 0,
         overflow: 'hidden',

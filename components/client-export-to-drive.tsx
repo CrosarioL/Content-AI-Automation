@@ -12,13 +12,12 @@ import type { SlideLayoutConfig } from '@/types'
 import type { ExportPreparePayload } from '@/lib/export-build-layouts'
 import { COUNTRY_LABELS } from '@/lib/constants'
 
-const CANVAS_WIDTH = 1080
-const CANVAS_HEIGHT = 1920
-
 function renderSlideToDataUrl(layoutConfig: SlideLayoutConfig): Promise<string> {
   return new Promise((resolve, reject) => {
     const container = document.createElement('div')
-    container.style.cssText = 'position:absolute;left:-9999px;width:1080px;height:1920px;'
+    const w = layoutConfig.canvas?.width ?? 1080
+    const h = layoutConfig.canvas?.height ?? 1920
+    container.style.cssText = `position:absolute;left:-9999px;width:${w}px;height:${h}px;`
     document.body.appendChild(container)
 
     const stageRef = { current: null as any }
