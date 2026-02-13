@@ -46,7 +46,7 @@ export function measureTextLines(
     lineHeight = 1.2,
   } = opts
 
-  const effectiveWrapWidth = hasArabicScript(text) ? Math.floor(wrapWidth * 0.55) : wrapWidth
+  const effectiveWrapWidth = hasArabicScript(text) ? Math.floor(wrapWidth * 0.35) : wrapWidth
 
   const font = `${fontWeight} ${fontSize}px ${fontFamily}`
   ctx.font = font

@@ -39,7 +39,7 @@ export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
   const displayText = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
   const hasExplicitLineBreaks = displayText.includes('\n')
   const baseWrapWidth = Math.max(layer.size?.width ?? 1000, 800)
-  const wrapWidth = hasArabicScript(displayText) ? Math.floor(baseWrapWidth * 0.55) : baseWrapWidth
+  const wrapWidth = hasArabicScript(displayText) ? Math.floor(baseWrapWidth * 0.35) : baseWrapWidth
 
   const textStyle: CSSProperties = {
     fontFamily: escapeFontFamily(layer.fontFamily || 'Inter, sans-serif'),
@@ -126,7 +126,7 @@ export function getWrappedLinesForExport(
   const approxCharWidth = fontSize * 0.55
   const effectiveWidth = Math.max(wrapWidth - 36, 900)
   let maxCharsPerLine = Math.max(20, Math.floor(effectiveWidth / approxCharWidth))
-  if (hasArabicScript(text)) maxCharsPerLine = Math.max(15, Math.floor(maxCharsPerLine * 0.55))
+  if (hasArabicScript(text)) maxCharsPerLine = Math.max(12, Math.floor(maxCharsPerLine * 0.35))
   for (const para of paragraphs) {
     const words = para.split(/\s+/).filter(Boolean)
     if (words.length === 0) continue
