@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from './utils'
 
 export async function translateText(text: string, targetLang: 'ar' | 'ms'): Promise<string> {
   const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY
@@ -25,7 +26,8 @@ export async function translateText(text: string, targetLang: 'ar' | 'ms'): Prom
     }
     
     const data = await response.json()
-    return data.data.translations[0].translatedText || text
+    const raw = data.data.translations[0].translatedText || text
+    return decodeHtmlEntities(raw)
   } catch (error) {
     console.error('Translation error:', error)
     return text

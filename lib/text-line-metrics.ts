@@ -20,9 +20,17 @@ export interface MeasureOptions {
   lineHeight?: number
 }
 
+/** True if text contains predominantly Arabic (so we wrap earlier for readability). */
+function hasArabicScript(text: string): boolean {
+  const arabicBlock = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/
+  const arabicCount = (text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g) || []).length
+  return arabicCount >= 2 || (text.length > 0 && arabicCount / text.length > 0.2)
+}
+
 /**
  * Break text into lines that fit wrapWidth and measure each line's width.
  * Uses word-boundary wrapping. Returns metrics for each line.
+ * Arabic text uses a shorter effective wrap width so lines break earlier.
  */
 export function measureTextLines(
   ctx: CanvasRenderingContext2D,
@@ -37,6 +45,8 @@ export function measureTextLines(
     letterSpacing = 0,
     lineHeight = 1.2,
   } = opts
+
+  const effectiveWrapWidth = hasArabicScript(text) ? Math.floor(wrapWidth * 0.55) : wrapWidth
 
   const font = `${fontWeight} ${fontSize}px ${fontFamily}`
   ctx.font = font
@@ -55,7 +65,7 @@ export function measureTextLines(
     for (let i = 1; i < words.length; i++) {
       const candidate = currentLine + ' ' + words[i]
       const w = ctx.measureText(candidate).width
-      if (w > wrapWidth) {
+      if (w > effectiveWrapWidth) {
         const lineWidth = ctx.measureText(currentLine).width
         lines.push({ text: currentLine, width: lineWidth, y })
         y += lineHeightPx
@@ -71,5 +81,6 @@ export function measureTextLines(
     }
   }
 
-  return lines.length ? lines : [{ text: text || ' ', width: ctx.measureText(text || ' ').width, y: 0 }]
+  const fallbackWidth = ctx.measureText(text || ' ').width
+  return lines.length ? lines : [{ text: text || ' ', width: fallbackWidth, y: 0 }]
 }

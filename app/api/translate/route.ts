@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { decodeHtmlEntities } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,8 +38,9 @@ export async function POST(request: NextRequest) {
     }
     
     const data = await response.json()
-    const translatedText = data.data.translations[0].translatedText || text
-    
+    let translatedText = data.data.translations[0].translatedText || text
+    translatedText = decodeHtmlEntities(translatedText)
+
     return NextResponse.json({ translatedText })
   } catch (error: any) {
     console.error('Translation error:', error)

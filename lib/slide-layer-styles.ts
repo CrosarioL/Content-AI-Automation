@@ -24,6 +24,12 @@ export interface LayerRenderData {
   textStyle: CSSProperties
 }
 
+/** True if text contains Arabic script (wrap earlier for readability). */
+function hasArabicScript(text: string): boolean {
+  const arabicCount = (text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g) || []).length
+  return arabicCount >= 2 || (text.length > 0 && arabicCount / text.length > 0.2)
+}
+
 export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
   const scaleX = layer.scale?.x ?? 1
   const scaleY = layer.scale?.y ?? 1
@@ -32,8 +38,8 @@ export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
   const centerY = layer.position.y
   const displayText = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
   const hasExplicitLineBreaks = displayText.includes('\n')
-  // Minimum 800px so text never wraps to single chars (TikTok-style ~20+ chars/line)
-  const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
+  const baseWrapWidth = Math.max(layer.size?.width ?? 1000, 800)
+  const wrapWidth = hasArabicScript(displayText) ? Math.floor(baseWrapWidth * 0.55) : baseWrapWidth
 
   const textStyle: CSSProperties = {
     fontFamily: escapeFontFamily(layer.fontFamily || 'Inter, sans-serif'),
@@ -108,6 +114,7 @@ export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
 /**
  * Break text into lines that fit wrapWidth (no DOM/canvas). Word-boundary only, never mid-word.
  * Used by backend renderer for per-line pills. Uses approximate width ~0.55 * fontSize per char.
+ * Arabic text uses a shorter line length so lines break earlier.
  */
 export function getWrappedLinesForExport(
   text: string,
@@ -117,9 +124,9 @@ export function getWrappedLinesForExport(
   const lines: string[] = []
   const paragraphs = text.split('\n')
   const approxCharWidth = fontSize * 0.55
-  // Minimum ~20 chars per line (TikTok-style); avoid tiny wrap from old layers
   const effectiveWidth = Math.max(wrapWidth - 36, 900)
-  const maxCharsPerLine = Math.max(20, Math.floor(effectiveWidth / approxCharWidth))
+  let maxCharsPerLine = Math.max(20, Math.floor(effectiveWidth / approxCharWidth))
+  if (hasArabicScript(text)) maxCharsPerLine = Math.max(15, Math.floor(maxCharsPerLine * 0.55))
   for (const para of paragraphs) {
     const words = para.split(/\s+/).filter(Boolean)
     if (words.length === 0) continue

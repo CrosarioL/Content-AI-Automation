@@ -9,6 +9,7 @@ import { renderSlide, closeBrowser } from '@/lib/renderer'
 import { uploadToGoogleDrive } from '@/lib/google-drive'
 import { COUNTRY_LABELS } from '@/lib/constants'
 import { getEffectiveSlideChoices } from '@/lib/export-build-layouts'
+import { decodeHtmlEntities } from '@/lib/utils'
 import type { 
   Persona, 
   Country, 
@@ -45,7 +46,8 @@ async function translateText(text: string, targetLang: 'ar' | 'ms'): Promise<str
     }
     
     const data = await response.json()
-    return data.data.translations[0].translatedText || text
+    const raw = data.data.translations[0].translatedText || text
+    return decodeHtmlEntities(raw)
   } catch (error) {
     console.error('Translation error:', error)
     return text // Fallback to original text
