@@ -9,7 +9,7 @@ import { useRef, useEffect, useState, useMemo } from 'react'
 import { Stage, Layer, Rect, Text as KonvaText, Group, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines } from '@/lib/text-line-metrics'
+import { measureTextLines, getEffectiveWrapWidth } from '@/lib/text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -155,6 +155,7 @@ export function SlideExportCanvas({
           const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
           const align = layer.align || 'center'
           const blockWidth = layer.size?.width ?? wrapWidth
+          const effectiveBlockWidth = getEffectiveWrapWidth(text, blockWidth)
 
           return (
             <Group
@@ -173,9 +174,9 @@ export function SlideExportCanvas({
                 if (align === 'center') {
                   rectX = -rectWidth / 2
                 } else if (align === 'right') {
-                  rectX = blockWidth / 2 - rectWidth
+                  rectX = effectiveBlockWidth / 2 - rectWidth
                 } else {
-                  rectX = -blockWidth / 2 - pad
+                  rectX = -effectiveBlockWidth / 2 - pad
                 }
                 return (
                   <Rect
@@ -191,9 +192,9 @@ export function SlideExportCanvas({
                 )
               }) : (
                 <Rect
-                  x={-blockWidth / 2 - pad}
+                  x={-effectiveBlockWidth / 2 - pad}
                   y={-textTopOffset - pad}
-                  width={blockWidth + pad * 2}
+                  width={effectiveBlockWidth + pad * 2}
                   height={(layer.size?.height ?? fontSize * 3) + pad * 2}
                   fill={layer.background}
                   cornerRadius={10}
@@ -202,9 +203,9 @@ export function SlideExportCanvas({
               ))}
               <KonvaText
                 text={text}
-                x={-blockWidth / 2}
+                x={-effectiveBlockWidth / 2}
                 y={-textTopOffset}
-                width={blockWidth}
+                width={effectiveBlockWidth}
                 fontSize={fontSize}
                 fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
                 fontStyle={layer.fontWeight || '500'}

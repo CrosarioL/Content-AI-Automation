@@ -7,7 +7,7 @@
 import React, { useMemo, useRef } from 'react'
 import { Stage, Layer, Rect, Text as KonvaText, Group, Image as KonvaImage } from 'react-konva'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines } from '@/lib/text-line-metrics'
+import { measureTextLines, getEffectiveWrapWidth } from '@/lib/text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -181,6 +181,7 @@ export function SlideKonvaPreview({
               const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
               const align = layer.align || 'center'
               const blockWidth = layer.size?.width ?? wrapWidth
+              const effectiveBlockWidth = getEffectiveWrapWidth(text, blockWidth)
 
               return (
                 <Group
@@ -198,8 +199,8 @@ export function SlideKonvaPreview({
                         const rectWidth = metric.width + pad * 2
                         let rectX: number
                         if (align === 'center') rectX = -rectWidth / 2
-                        else if (align === 'right') rectX = blockWidth / 2 - rectWidth
-                        else rectX = -blockWidth / 2 - pad
+                        else if (align === 'right') rectX = effectiveBlockWidth / 2 - rectWidth
+                        else rectX = -effectiveBlockWidth / 2 - pad
                         return (
                           <Rect
                             key={i}
@@ -214,9 +215,9 @@ export function SlideKonvaPreview({
                       })
                     ) : (
                       <Rect
-                        x={-blockWidth / 2 - pad}
+                        x={-effectiveBlockWidth / 2 - pad}
                         y={-textTopOffset - pad}
-                        width={blockWidth + pad * 2}
+                        width={effectiveBlockWidth + pad * 2}
                         height={(layer.size?.height ?? fontSize * 3) + pad * 2}
                         fill={layer.background}
                         cornerRadius={10}
@@ -224,9 +225,9 @@ export function SlideKonvaPreview({
                     ))}
                   <KonvaText
                     text={text}
-                    x={-blockWidth / 2}
+                    x={-effectiveBlockWidth / 2}
                     y={-textTopOffset}
-                    width={blockWidth}
+                    width={effectiveBlockWidth}
                     fontSize={fontSize}
                     fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
                     fontStyle={layer.fontWeight || '500'}
@@ -352,12 +353,14 @@ function getLayerWrapperStyle(layer: SlideTextLayer): React.CSSProperties {
   const scaleX = layer.scale?.x ?? 1
   const scaleY = layer.scale?.y ?? 1
   const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
+  const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+  const width = getEffectiveWrapWidth(text, wrapWidth)
   const minH = (layer.size?.height ?? 80) || 80
   return {
     position: 'absolute',
     left: layer.position.x,
     top: layer.position.y,
-    width: wrapWidth,
+    width,
     minHeight: minH,
     transform: `translate(-50%, -50%) rotate(${layer.rotation ?? 0}deg) scale(${scaleX}, ${scaleY})`,
     transformOrigin: 'center center',

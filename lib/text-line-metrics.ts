@@ -21,10 +21,14 @@ export interface MeasureOptions {
 }
 
 /** True if text contains predominantly Arabic (so we wrap earlier for readability). */
-function hasArabicScript(text: string): boolean {
-  const arabicBlock = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/
+export function hasArabicScript(text: string): boolean {
   const arabicCount = (text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g) || []).length
   return arabicCount >= 2 || (text.length > 0 && arabicCount / text.length > 0.2)
+}
+
+/** Wrap width to use for layout/rendering (shorter for Arabic). Use for Konva Text width and similar. */
+export function getEffectiveWrapWidth(text: string, wrapWidth: number): number {
+  return hasArabicScript(text) ? Math.floor(wrapWidth * 0.35) : wrapWidth
 }
 
 /**
