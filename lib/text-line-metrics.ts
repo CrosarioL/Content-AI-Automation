@@ -20,21 +20,20 @@ export interface MeasureOptions {
   lineHeight?: number
 }
 
-/** True if text contains predominantly Arabic (so we wrap earlier for readability). */
+/** True if text contains predominantly Arabic. Currently unused but kept for potential future tweaks. */
 export function hasArabicScript(text: string): boolean {
   const arabicCount = (text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g) || []).length
   return arabicCount >= 2 || (text.length > 0 && arabicCount / text.length > 0.2)
 }
 
-/** Wrap width to use for layout/rendering (shorter for Arabic). Use for Konva Text width and similar. */
+/** Wrap width to use for layout/rendering. We now keep Arabic the same width as other languages. */
 export function getEffectiveWrapWidth(text: string, wrapWidth: number): number {
-  return hasArabicScript(text) ? Math.floor(wrapWidth * 0.5) : wrapWidth
+  return wrapWidth
 }
 
 /**
  * Break text into lines that fit wrapWidth and measure each line's width.
  * Uses word-boundary wrapping. Returns metrics for each line.
- * Arabic text uses a shorter effective wrap width so lines break earlier.
  */
 export function measureTextLines(
   ctx: CanvasRenderingContext2D,
@@ -50,7 +49,7 @@ export function measureTextLines(
     lineHeight = 1.2,
   } = opts
 
-  const effectiveWrapWidth = hasArabicScript(text) ? Math.floor(wrapWidth * 0.5) : wrapWidth
+  const effectiveWrapWidth = wrapWidth
 
   const font = `${fontWeight} ${fontSize}px ${fontFamily}`
   ctx.font = font
