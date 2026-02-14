@@ -7,7 +7,7 @@
 import React, { useMemo, useRef } from 'react'
 import { Stage, Layer, Rect, Text as KonvaText, Group, Image as KonvaImage } from 'react-konva'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines, getEffectiveWrapWidth } from '@/lib/text-line-metrics'
+import { measureTextLines, getEffectiveWrapWidth, hasArabicScript } from '@/lib/text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -179,7 +179,8 @@ export function SlideKonvaPreview({
               const lineHeightPx = fontSize * lineHeight
               const textTopOffset = fontSize * 0.05
               const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
-              const align = layer.align || 'center'
+              const isRtl = hasArabicScript(text)
+              const align = isRtl ? 'right' : (layer.align || 'center')
               const blockWidth = layer.size?.width ?? wrapWidth
               const effectiveBlockWidth = getEffectiveWrapWidth(text, blockWidth)
 
@@ -233,6 +234,7 @@ export function SlideKonvaPreview({
                     fontStyle={layer.fontWeight || '500'}
                     fill={layer.color || '#ffffff'}
                     align={align}
+                    direction={isRtl ? 'rtl' : 'ltr'}
                     wrap="word"
                     stroke={layer.strokeColor || 'transparent'}
                     strokeWidth={layer.strokeWidth ?? 0}

@@ -8,7 +8,7 @@ import path from 'path'
 import fs from 'fs'
 import { supabaseServer } from './supabase'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines } from './text-line-metrics'
+import { measureTextLines, hasArabicScript } from './text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -154,7 +154,8 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
     const fontFamily = resolveExportFontFamily(rawFamily, fontWeight)
     const lineHeight = layer.lineHeight ?? 1.2
     const lineHeightPx = fontSize * lineHeight
-    const align = layer.align || 'center'
+    const isRtl = hasArabicScript(text)
+    const align = isRtl ? 'right' : (layer.align || 'center')
     const blockWidth = layer.size?.width ?? Math.max(layer.size?.width ?? 1000, 800)
     const wrapWidth = Math.max(blockWidth, 800)
     const hasBackground = !!(layer.background && layer.background !== 'transparent')
@@ -210,6 +211,7 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
       fontStyle: 'normal',
       fill: layer.color || '#ffffff',
       align,
+      direction: isRtl ? 'rtl' : 'ltr',
       wrap: 'word',
       stroke: layer.strokeColor || 'transparent',
       strokeWidth: layer.strokeWidth ?? 0,

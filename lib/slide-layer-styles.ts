@@ -5,6 +5,7 @@
  */
 import type { CSSProperties } from 'react'
 import type { SlideTextLayer } from '@/types'
+import { hasArabicScript } from './text-line-metrics'
 
 function escapeFontFamily(fontFamily: string): string {
   return fontFamily.replace(/"/g, "'")
@@ -32,6 +33,7 @@ export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
   const centerY = layer.position.y
   const displayText = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
   const hasExplicitLineBreaks = displayText.includes('\n')
+  const isRtl = hasArabicScript(displayText)
   // Minimum 800px so text never wraps to single chars (TikTok-style ~20+ chars/line)
   const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
 
@@ -40,7 +42,8 @@ export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
     fontWeight: layer.fontWeight || '500',
     fontSize: layer.fontSize || 60,
     color: layer.color || '#ffffff',
-    textAlign: layer.align || 'center',
+    textAlign: isRtl ? 'right' : (layer.align || 'center'),
+    direction: isRtl ? 'rtl' : 'ltr',
     whiteSpace: hasExplicitLineBreaks ? 'pre-wrap' : 'normal',
     lineHeight: layer.lineHeight ?? 1.2,
     overflowWrap: 'break-word',
@@ -66,7 +69,8 @@ export function getLayerRenderData(layer: SlideTextLayer): LayerRenderData {
     transformOrigin: 'center center',
     transform: `translate(-50%, -50%) rotate(${layer.rotation ?? 0}deg) scale(${scaleX}, ${scaleY})`,
     opacity: layer.opacity ?? 1,
-    textAlign: layer.align || 'center',
+    textAlign: isRtl ? 'right' : (layer.align || 'center'),
+    direction: isRtl ? 'rtl' : 'ltr',
   }
   const containerPositionStyle: CSSProperties = {
     position: 'absolute',
