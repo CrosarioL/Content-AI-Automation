@@ -8,7 +8,7 @@ import path from 'path'
 import fs from 'fs'
 import { supabaseServer } from './supabase'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines, hasArabicScript } from './text-line-metrics'
+import { measureTextLines, hasArabicScript, isArrowOnlyLine } from './text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -148,6 +148,10 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
 
   for (const layer of layers) {
     const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+    const lines = text.split('\n')
+    const hasArrowOnlyLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
+    const mainText = hasArrowOnlyLastLine ? lines.slice(0, -1).join('\n') : text
+    const arrowLine = hasArrowOnlyLastLine ? lines[lines.length - 1] : null
     const fontSize = layer.fontSize ?? 60
     const rawFamily = layer.fontFamily?.replace(/['"]/g, '') || 'TikTok Sans'
     const fontWeight = layer.fontWeight || '500'
@@ -171,10 +175,10 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
       opacity: layer.opacity ?? 1,
     })
 
-    // Per-line background rects (TikTok-style pills)
+    // Per-line background rects (TikTok-style pills) — use mainText so we don't pill the arrow line
     if (hasBackground) {
       const lineMetrics = measureTextLines(measureCtx, {
-        text,
+        text: mainText,
         wrapWidth,
         fontSize,
         fontFamily,
@@ -202,7 +206,7 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
 
     // Static fonts: weight is in family name, use fontStyle 'normal'
     group.add(new Konva.Text({
-      text,
+      text: mainText,
       x: -blockWidth / 2,
       y: -textTopOffset,
       width: blockWidth,
@@ -219,6 +223,27 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
       lineHeight,
       letterSpacing: layer.letterSpacing ?? 0,
     }))
+
+    if (arrowLine != null) {
+      group.add(new Konva.Text({
+        text: arrowLine,
+        x: -blockWidth / 2,
+        y: -textTopOffset + (lines.length - 1) * lineHeightPx,
+        width: blockWidth,
+        fontSize,
+        fontFamily,
+        fontStyle: 'normal',
+        fill: layer.color || '#ffffff',
+        align: 'center',
+        direction: 'ltr',
+        wrap: 'word',
+        stroke: layer.strokeColor || 'transparent',
+        strokeWidth: layer.strokeWidth ?? 0,
+        fillAfterStrokeEnabled: true,
+        lineHeight,
+        letterSpacing: layer.letterSpacing ?? 0,
+      }))
+    }
 
     textLayer.add(group)
   }

@@ -9,7 +9,7 @@ import { useRef, useEffect, useState, useMemo } from 'react'
 import { Stage, Layer, Rect, Text as KonvaText, Group, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines, getEffectiveWrapWidth, hasArabicScript } from '@/lib/text-line-metrics'
+import { measureTextLines, getEffectiveWrapWidth, hasArabicScript, isArrowOnlyLine } from '@/lib/text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -152,7 +152,12 @@ export function SlideExportCanvas({
           const lineHeight = layer.lineHeight ?? 1.2
           const lineHeightPx = fontSize * lineHeight
           const textTopOffset = fontSize * 0.05
-          const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
+          const lines = text.split('\n')
+          const hasArrowOnlyLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
+          const mainText = hasArrowOnlyLastLine ? lines.slice(0, -1).join('\n') : text
+          const arrowLine = hasArrowOnlyLastLine ? lines[lines.length - 1] : null
+          const lineMetricsRaw = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
+          const lineMetrics = hasArrowOnlyLastLine && lineMetricsRaw.length > 0 ? lineMetricsRaw.slice(0, -1) : lineMetricsRaw
           const isRtl = hasArabicScript(text)
           const align = isRtl ? 'right' : (layer.align || 'center')
           const blockWidth = layer.size?.width ?? wrapWidth
@@ -203,7 +208,7 @@ export function SlideExportCanvas({
                 />
               ))}
               <KonvaText
-                text={text}
+                text={mainText}
                 x={-effectiveBlockWidth / 2}
                 y={-textTopOffset}
                 width={effectiveBlockWidth}
@@ -221,6 +226,27 @@ export function SlideExportCanvas({
                 letterSpacing={layer.letterSpacing ?? 0}
                 listening={false}
               />
+              {arrowLine != null && (
+                <KonvaText
+                  text={arrowLine}
+                  x={-effectiveBlockWidth / 2}
+                  y={-textTopOffset + (lines.length - 1) * lineHeightPx}
+                  width={effectiveBlockWidth}
+                  fontSize={fontSize}
+                  fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
+                  fontStyle={layer.fontWeight || '500'}
+                  fill={layer.color || '#ffffff'}
+                  align="center"
+                  direction="ltr"
+                  wrap="word"
+                  stroke={layer.strokeColor || 'transparent'}
+                  strokeWidth={layer.strokeWidth ?? 0}
+                  fillAfterStrokeEnabled
+                  lineHeight={lineHeight}
+                  letterSpacing={layer.letterSpacing ?? 0}
+                  listening={false}
+                />
+              )}
             </Group>
           )
         })}

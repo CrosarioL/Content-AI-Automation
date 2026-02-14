@@ -31,6 +31,11 @@ export function getEffectiveWrapWidth(text: string, wrapWidth: number): number {
   return wrapWidth
 }
 
+/** True if the line is only arrows/symbols (e.g. >>> or <<<) so we can center it separately. */
+export function isArrowOnlyLine(line: string): boolean {
+  return /^[\s<>]*$/.test(line.trim()) && line.trim().length > 0
+}
+
 /**
  * Break text into lines that fit wrapWidth and measure each line's width.
  * Uses word-boundary wrapping. Returns metrics for each line.
