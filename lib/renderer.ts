@@ -8,7 +8,7 @@ import path from 'path'
 import fs from 'fs'
 import { supabaseServer } from './supabase'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines, hasArabicScript, isArrowOnlyLine } from './text-line-metrics'
+import { measureTextLines, hasArabicScript, isArrowOnlyLine, getTrailingArrowParts } from './text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -149,9 +149,10 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
   for (const layer of layers) {
     const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
     const lines = text.split('\n')
-    const hasArrowOnlyLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
-    const mainText = hasArrowOnlyLastLine ? lines.slice(0, -1).join('\n') : text
-    const arrowLine = hasArrowOnlyLastLine ? lines[lines.length - 1] : null
+    const hasArrowLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
+    const trailing = getTrailingArrowParts(text)
+    const mainText = hasArrowLastLine ? lines.slice(0, -1).join('\n') : (trailing?.mainText ?? text)
+    const arrowLine = hasArrowLastLine ? lines[lines.length - 1] : (trailing?.arrowLine ?? null)
     const fontSize = layer.fontSize ?? 60
     const rawFamily = layer.fontFamily?.replace(/['"]/g, '') || 'TikTok Sans'
     const fontWeight = layer.fontWeight || '500'
@@ -175,18 +176,19 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
       opacity: layer.opacity ?? 1,
     })
 
+    const lineMetricsMain = measureTextLines(measureCtx, {
+      text: mainText,
+      wrapWidth,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      lineHeight,
+    })
+    const arrowY = arrowLine != null ? lineMetricsMain.length * lineHeightPx : 0
+
     // Per-line background rects (TikTok-style pills) — use mainText so we don't pill the arrow line
     if (hasBackground) {
-      const lineMetrics = measureTextLines(measureCtx, {
-        text: mainText,
-        wrapWidth,
-        fontSize,
-        fontFamily,
-        fontWeight,
-        lineHeight,
-      })
-
-      for (const metric of lineMetrics) {
+      for (const metric of lineMetricsMain) {
         const rectWidth = metric.width + pad * 2
         let rectX: number
         if (align === 'center') rectX = -rectWidth / 2
@@ -228,7 +230,7 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
       group.add(new Konva.Text({
         text: arrowLine,
         x: -blockWidth / 2,
-        y: -textTopOffset + (lines.length - 1) * lineHeightPx,
+        y: -textTopOffset + arrowY,
         width: blockWidth,
         fontSize,
         fontFamily,

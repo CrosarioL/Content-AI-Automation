@@ -33,7 +33,18 @@ export function getEffectiveWrapWidth(text: string, wrapWidth: number): number {
 
 /** True if the line is only arrows/symbols (e.g. >>> or <<<) so we can center it separately. */
 export function isArrowOnlyLine(line: string): boolean {
-  return /^[\s<>]*$/.test(line.trim()) && line.trim().length > 0
+  return /^[\s<>]+$/.test(line.replace(/\r/g, '').trim()) && line.trim().length > 0
+}
+
+/** If text ends with arrow-only (e.g. "<<<" with or without leading space), return { mainText, arrowLine }. */
+export function getTrailingArrowParts(text: string): { mainText: string; arrowLine: string } | null {
+  const trimmed = text.replace(/\r/g, '')
+  const match = trimmed.match(/\s*[<>]+\s*$/)
+  if (!match || match[0].trim().length === 0) return null
+  return {
+    mainText: trimmed.slice(0, -match[0].length).trimEnd(),
+    arrowLine: match[0].trim(),
+  }
 }
 
 /**

@@ -9,7 +9,7 @@ import { useRef, useEffect, useState, useMemo } from 'react'
 import { Stage, Layer, Rect, Text as KonvaText, Group, Image as KonvaImage } from 'react-konva'
 import type Konva from 'konva'
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
-import { measureTextLines, getEffectiveWrapWidth, hasArabicScript, isArrowOnlyLine } from '@/lib/text-line-metrics'
+import { measureTextLines, getEffectiveWrapWidth, hasArabicScript, isArrowOnlyLine, getTrailingArrowParts } from '@/lib/text-line-metrics'
 
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
@@ -100,8 +100,12 @@ export function SlideExportCanvas({
       const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
       const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
       if (!hasBackground) continue
+      const lines = text.split('\n')
+      const hasArrowLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
+      const trailing = getTrailingArrowParts(text)
+      const mainText = hasArrowLastLine ? lines.slice(0, -1).join('\n') : (trailing?.mainText ?? text)
       const metrics = measureTextLines(measureCtx, {
-        text,
+        text: mainText,
         wrapWidth,
         fontSize: layer.fontSize ?? 60,
         fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter',
@@ -109,6 +113,31 @@ export function SlideExportCanvas({
         lineHeight: layer.lineHeight ?? 1.2,
       })
       map.set(layer.id, metrics)
+    }
+    return map
+  }, [measureCtx, layers])
+
+  type ArrowInfo = { mainText: string; arrowLine: string; arrowY: number }
+  const arrowInfoByLayer = useMemo(() => {
+    const map = new Map<string, ArrowInfo>()
+    if (!measureCtx) return map
+    for (const layer of layers) {
+      const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+      const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
+      const fontSize = layer.fontSize ?? 60
+      const lh = layer.lineHeight ?? 1.2
+      const lines = text.split('\n')
+      const hasArrowLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
+      const trailing = getTrailingArrowParts(text)
+      if (hasArrowLastLine) {
+        const mainText = lines.slice(0, -1).join('\n')
+        const arrowLine = lines[lines.length - 1]
+        const metrics = measureTextLines(measureCtx, { text: mainText, wrapWidth, fontSize, fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter', fontWeight: layer.fontWeight || '500', lineHeight: lh })
+        map.set(layer.id, { mainText, arrowLine, arrowY: metrics.length * fontSize * lh })
+      } else if (trailing) {
+        const metrics = measureTextLines(measureCtx, { text: trailing.mainText, wrapWidth, fontSize, fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter', fontWeight: layer.fontWeight || '500', lineHeight: lh })
+        map.set(layer.id, { mainText: trailing.mainText, arrowLine: trailing.arrowLine, arrowY: metrics.length * fontSize * lh })
+      }
     }
     return map
   }, [measureCtx, layers])
@@ -152,12 +181,11 @@ export function SlideExportCanvas({
           const lineHeight = layer.lineHeight ?? 1.2
           const lineHeightPx = fontSize * lineHeight
           const textTopOffset = fontSize * 0.05
-          const lines = text.split('\n')
-          const hasArrowOnlyLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
-          const mainText = hasArrowOnlyLastLine ? lines.slice(0, -1).join('\n') : text
-          const arrowLine = hasArrowOnlyLastLine ? lines[lines.length - 1] : null
-          const lineMetricsRaw = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
-          const lineMetrics = hasArrowOnlyLastLine && lineMetricsRaw.length > 0 ? lineMetricsRaw.slice(0, -1) : lineMetricsRaw
+          const arrowInfo = arrowInfoByLayer.get(layer.id)
+          const mainText = arrowInfo ? arrowInfo.mainText : text
+          const arrowLine = arrowInfo?.arrowLine ?? null
+          const arrowY = arrowInfo?.arrowY ?? 0
+          const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
           const isRtl = hasArabicScript(text)
           const align = isRtl ? 'right' : (layer.align || 'center')
           const blockWidth = layer.size?.width ?? wrapWidth
@@ -230,7 +258,7 @@ export function SlideExportCanvas({
                 <KonvaText
                   text={arrowLine}
                   x={-effectiveBlockWidth / 2}
-                  y={-textTopOffset + (lines.length - 1) * lineHeightPx}
+                  y={-textTopOffset + arrowY}
                   width={effectiveBlockWidth}
                   fontSize={fontSize}
                   fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
