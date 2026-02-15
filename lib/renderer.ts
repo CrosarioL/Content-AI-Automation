@@ -161,7 +161,6 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
     const fontFamily = resolveExportFontFamily(rawFamily, fontWeight)
     const lineHeight = layer.lineHeight ?? 1.2
     const lineHeightPx = fontSize * lineHeight
-    const isRtl = hasArabicScript(text)
     const align = isRtl ? 'right' : (layer.align || 'center')
     const blockWidth = layer.size?.width ?? Math.max(layer.size?.width ?? 1000, 800)
     const wrapWidth = Math.max(blockWidth, 800)
