@@ -125,11 +125,13 @@ export function SlideKonvaPreview({
         lineHeight: layer.lineHeight ?? 1.2,
       }
       if (!hasBackground) continue
+      const isRtl = hasArabicScript(text)
       const lines = text.split('\n')
       const hasArrowLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
       const trailing = getTrailingArrowParts(text)
-      const mainText = hasArrowLastLine ? lines.slice(0, -1).join('\n') : (trailing?.mainText ?? text)
-      const metrics = measureTextLines(measureCtx, { ...opts, text: mainText })
+      const useArrowSplit = isRtl && (hasArrowLastLine || !!trailing)
+      const textForMetrics = useArrowSplit ? (hasArrowLastLine ? lines.slice(0, -1).join('\n') : (trailing!.mainText)) : text
+      const metrics = measureTextLines(measureCtx, { ...opts, text: textForMetrics })
       map.set(layer.id, metrics)
     }
     return map
@@ -142,6 +144,7 @@ export function SlideKonvaPreview({
     const lineHeightPx = (fontSize: number, lineHeight: number) => fontSize * (lineHeight ?? 1.2)
     for (const layer of layers) {
       const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+      if (!hasArabicScript(text)) continue
       const wrapWidth = Math.max(layer.size?.width ?? 1000, 800)
       const fontSize = layer.fontSize ?? 60
       const lh = layer.lineHeight ?? 1.2

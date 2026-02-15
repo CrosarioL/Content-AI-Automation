@@ -148,11 +148,13 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
 
   for (const layer of layers) {
     const text = (layer as { wrappedText?: string }).wrappedText ?? layer.text ?? ''
+    const isRtl = hasArabicScript(text)
     const lines = text.split('\n')
     const hasArrowLastLine = lines.length >= 2 && isArrowOnlyLine(lines[lines.length - 1])
     const trailing = getTrailingArrowParts(text)
-    const mainText = hasArrowLastLine ? lines.slice(0, -1).join('\n') : (trailing?.mainText ?? text)
-    const arrowLine = hasArrowLastLine ? lines[lines.length - 1] : (trailing?.arrowLine ?? null)
+    const useArrowSplit = isRtl && (hasArrowLastLine || !!trailing)
+    const mainText = useArrowSplit ? (hasArrowLastLine ? lines.slice(0, -1).join('\n') : (trailing!.mainText)) : text
+    const arrowLine = useArrowSplit ? (hasArrowLastLine ? lines[lines.length - 1] : trailing!.arrowLine) : null
     const fontSize = layer.fontSize ?? 60
     const rawFamily = layer.fontFamily?.replace(/['"]/g, '') || 'TikTok Sans'
     const fontWeight = layer.fontWeight || '500'
