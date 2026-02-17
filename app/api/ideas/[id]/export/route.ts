@@ -214,7 +214,7 @@ export async function POST(
           })
 
           slidesFolder.file(
-            `slide-${String(result.slideNumber).padStart(2, '0')}.png`,
+            `slide-${String(result.slideNumber).padStart(2, '0')}.jpg`,
             result.imageBuffer
           )
 

@@ -281,7 +281,7 @@ export async function renderSlide(options: RenderSlideOptions): Promise<RenderSl
 
     const stage = await buildKonvaStage(layout)
 
-    const dataUrl = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.85 })
+    const dataUrl = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.92 })
     const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '')
     const imageBuffer = Buffer.from(base64, 'base64')
 
@@ -356,7 +356,7 @@ export async function renderJobSlides(options: RenderJobSlidesOptions): Promise<
   const errors: string[] = []
 
   for (const slide of slides) {
-    const outputPath = `renders/${ideaId}/${persona}-${country}/slide-${slide.slideNumber}.png`
+    const outputPath = `renders/${ideaId}/${persona}-${country}/slide-${slide.slideNumber}.jpg`
     const result = await renderSlide({ layout: slide.layout, outputPath })
 
     if (result.success && result.storagePath && result.publicUrl) {
