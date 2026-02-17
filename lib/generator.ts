@@ -97,13 +97,14 @@ function buildSlideOptions(slides: PersonaSlideWithPools[], country: Country): S
 
     // Only use text variants for this country
     const textPools = slide.text_pools.filter((t) => t.country === country)
-    const textIndices = textPools.length > 0
+    const filteredTextIndices = textPools.length > 0
       ? [...new Set(
           textPools
             .map((t) => t.variant_index)
             .filter((index): index is 1 | 2 => index === 1 || index === 2)
         )]
-      : [1]
+      : []
+    const textIndices: (1 | 2)[] = filteredTextIndices.length > 0 ? filteredTextIndices : [1]
 
     return {
       slide_number: slide.slide_number,
