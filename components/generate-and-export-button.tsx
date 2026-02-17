@@ -16,17 +16,13 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
   const [isProcessing, setIsProcessing] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [progress, setProgress] = useState('')
-  const [downloadProgress, setDownloadProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [replaceExisting, setReplaceExisting] = useState(false)
 
-  const { exportToDrive, progress: exportProgress } = useClientExportToDrive(ideaId)
+  const { exportToDrive, exportToFlatZip, progress: exportProgress } = useClientExportToDrive(ideaId)
 
   const displayProgress = progress || exportProgress
-
-  const sanitizeFilename = (name: string) =>
-    name.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-').slice(0, 50)
 
   const handleGenerateAndExport = async () => {
     setIsProcessing(true)
@@ -72,34 +68,13 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
     setIsDownloading(true)
     setError(null)
     setSuccess(null)
-    setDownloadProgress('Preparing...')
 
     try {
-      const response = await fetch(`/api/ideas/${ideaId}/export`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flat: true }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'Download failed')
+      const result = await exportToFlatZip()
+      if (!result.success && result.error) {
+        throw new Error(result.error)
       }
-
-      setDownloadProgress('Downloading...')
-      const blob = await response.blob()
-
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${sanitizeFilename(ideaTitle)}-photos.zip`
-      link.click()
-      URL.revokeObjectURL(url)
-
-      setDownloadProgress('Complete!')
-      setTimeout(() => setDownloadProgress(''), 2000)
     } catch (err: any) {
-      setDownloadProgress('')
       setError(err.message || 'Download failed')
     } finally {
       setIsDownloading(false)
@@ -134,7 +109,7 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
           {isDownloading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {downloadProgress || 'Downloading...'}
+              {exportProgress || 'Downloading...'}
             </>
           ) : (
             <>
