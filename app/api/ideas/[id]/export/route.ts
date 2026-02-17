@@ -8,7 +8,7 @@ import {
 import { renderSlide, closeBrowser } from '@/lib/renderer'
 import { compileVideo } from '@/lib/video-compiler'
 import { COUNTRY_LABELS, COUNTRIES } from '@/lib/constants'
-import { getEffectiveSlideChoices } from '@/lib/export-build-layouts'
+import { getEffectiveSlideChoices, buildLayoutForSlide } from '@/lib/export-build-layouts'
 import type { 
   Persona, 
   Country, 
@@ -60,6 +60,20 @@ export async function POST(
         { error: 'No posts found. Generate posts first.' },
         { status: 400 }
       )
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const bucket =
+      process.env.SLIDE_ASSETS_BUCKET ||
+      process.env.NEXT_PUBLIC_SLIDE_ASSETS_BUCKET ||
+      'slide-assets'
+
+    const getImageUrl = (img: any) => {
+      if (img.metadata?.publicUrl) return img.metadata.publicUrl
+      if (img.storage_path) {
+        return `${supabaseUrl}/storage/v1/object/public/${bucket}/${img.storage_path}`
+      }
+      return undefined
     }
 
     // Order posts for predictable output
@@ -129,91 +143,8 @@ export async function POST(
           const slide = persona.slides.find((s) => s.slide_number === slideChoice.slide_number)
           if (!slide) return null
 
-          // Get text content for this country and variant
-          const textPool = slide.text_pools.find(
-            (t) => t.country === post.country && t.variant_index === slideChoice.text_variant_index
-          )
-          
-          // Get image if specified
-          let imageUrl: string | undefined
-          if (slideChoice.image_id) {
-            const image = slide.image_pools.find((img) => img.id === slideChoice.image_id)
-            if (image?.storage_path) {
-              // Construct public URL
-              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-              const bucket = process.env.SLIDE_ASSETS_BUCKET || 'slide-assets'
-              imageUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${image.storage_path}`
-            }
-          }
-
-          // Build layout config for rendering
-          let layoutConfig: SlideLayoutConfig
-          
-          if (textPool?.layout_config) {
-            const savedLayout = textPool.layout_config as SlideLayoutConfig
-            layoutConfig = {
-              ...savedLayout,
-              background: {
-                color: savedLayout.background?.color || '#0F1A2C',
-                image: imageUrl || undefined,
-              },
-              layers: savedLayout.layers?.map((layer) => {
-                const layerText = layer.text || ''
-                return {
-                  ...layer,
-                  text: layerText || textPool.content || '',
-                }
-              }) || (textPool.content ? [{
-                id: `auto-${slide.slide_number}`,
-                type: 'text' as const,
-                text: textPool.content,
-                fontFamily: '"Inter", sans-serif',
-                fontWeight: '700',
-                fontSize: 72,
-                color: '#ffffff',
-                strokeColor: '#000000',
-                strokeWidth: 4,
-                background: 'transparent',
-                align: 'center' as const,
-                position: { x: 300, y: 720 },
-                size: { width: 480, height: 480 },
-                rotation: 0,
-                scale: { x: 1, y: 1 },
-                opacity: 1,
-                zIndex: 0,
-              }] : []),
-            }
-          } else {
-            // Fallback: create default layout
-            layoutConfig = {
-              version: 1,
-              canvas: { width: 1080, height: 1920 },
-              safeZone: { top: 180, bottom: 220 },
-              background: { 
-                color: '#0F1A2C',
-                image: imageUrl,
-              },
-              layers: textPool?.content ? [{
-                id: `auto-${slide.slide_number}`,
-                type: 'text' as const,
-                text: textPool.content,
-                fontFamily: '"Inter", sans-serif',
-                fontWeight: '700',
-                fontSize: 72,
-                color: '#ffffff',
-                strokeColor: '#000000',
-                strokeWidth: 4,
-                background: 'transparent',
-                align: 'center' as const,
-                position: { x: 300, y: 720 },
-                size: { width: 480, height: 480 },
-                rotation: 0,
-                scale: { x: 1, y: 1 },
-                opacity: 1,
-                zIndex: 0,
-              }] : [],
-            }
-          }
+          const layoutConfig = buildLayoutForSlide(slide, slideChoice, post.country, getImageUrl)
+          if (!layoutConfig) return null
 
           // Render slide (node-canvas, no browser)
           const renderResult = await renderSlide({ layout: layoutConfig })
