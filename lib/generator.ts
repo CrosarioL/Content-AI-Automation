@@ -90,13 +90,19 @@ function shuffle<T>(array: T[], random: () => number): T[] {
 
 function buildSlideOptions(slides: PersonaSlideWithPools[], country: Country): SlideOptions[] {
   return slides.map((slide) => {
-    const imageIds = slide.image_pools.map((img) => img.id).filter(Boolean)
+    const imageIds = slide.image_pools
+      .map((img) => img.id)
+      .filter((id): id is string => Boolean(id))
     const normalizedImageIds = imageIds.length > 0 ? imageIds : [undefined]
 
     // Only use text variants for this country
     const textPools = slide.text_pools.filter((t) => t.country === country)
     const textIndices = textPools.length > 0
-      ? [...new Set(textPools.map((t) => t.variant_index as 1 | 2))]
+      ? [...new Set(
+          textPools
+            .map((t) => t.variant_index)
+            .filter((index): index is 1 | 2 => index === 1 || index === 2)
+        )]
       : [1]
 
     return {
