@@ -7,7 +7,7 @@ import {
 } from '@/lib/db'
 import { renderSlide, closeBrowser } from '@/lib/renderer'
 import { compileVideo } from '@/lib/video-compiler'
-import { COUNTRY_LABELS } from '@/lib/constants'
+import { COUNTRY_LABELS, COUNTRIES } from '@/lib/constants'
 import { getEffectiveSlideChoices } from '@/lib/export-build-layouts'
 import type { 
   Persona, 
@@ -31,7 +31,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const requestedPersonas = body.personas as Persona[] | undefined
     const requestedCountries = body.countries as Country[] | undefined
-    const flatPhotos = body.flatPhotos === true
+    const isFlat = body.flat === true || body.flat === 'true' || body.structure === 'flat'
 
     // Get idea with full structure
     const idea = await getIdeaWithDetailsV2(ideaId)
@@ -62,29 +62,37 @@ export async function POST(
       )
     }
 
-    // Create ZIP
+    // Order posts for predictable output
+    const countryOrder = new Map(COUNTRIES.map((country, index) => [country, index]))
+    const orderedPosts = [...posts].sort((a, b) => {
+      const countryDiff = (countryOrder.get(a.country) ?? 999) - (countryOrder.get(b.country) ?? 999)
+      if (countryDiff !== 0) return countryDiff
+      if (a.post_index !== b.post_index) return a.post_index - b.post_index
+      return a.persona_type.localeCompare(b.persona_type)
+    })
+
+    const totalSlides = orderedPosts.reduce((sum, post) => {
+      const persona = idea.personas.find((p) => p.persona_type === post.persona_type)
+      return sum + (persona?.slides.length || 0)
+    }, 0)
+    const sequencePad = Math.max(4, String(Math.max(totalSlides, 1)).length)
+    const maxPostIndex = orderedPosts.reduce(
+      (max, post) => Math.max(max, Number(post.post_index) || 0),
+      0
+    )
+    const postIndexPad = Math.max(2, String(Math.max(maxPostIndex, 1)).length)
+    const includeVideos = body.includeVideos === true && !isFlat
+
+    // Create ZIP (flat or nested)
     const zip = new JSZip()
-    const ideaFolderName = sanitizeFilename(idea.title)
-    const ideaFolder = zip.folder(ideaFolderName)
+    const ideaFolder = isFlat ? null : zip.folder(sanitizeFilename(idea.title))
     
-    if (!ideaFolder) {
+    if (!isFlat && !ideaFolder) {
       throw new Error('Failed to create ZIP folder')
     }
 
-    // Optional: "one folder of photos" mode for iPad (minimize nesting)
-    const photosFolder = flatPhotos ? (ideaFolder.folder('Photos') ?? ideaFolder) : null
-
     // Process each post (keep browser open across posts for better performance)
-    const orderedPosts = [...posts].sort((a, b) => {
-      const c = String(a.country).localeCompare(String(b.country))
-      if (c !== 0) return c
-      const p = (a.post_index ?? 0) - (b.post_index ?? 0)
-      if (p !== 0) return p
-      return String(a.persona_type).localeCompare(String(b.persona_type))
-    })
-
-    let globalIndex = 0
-
+    let flatIndex = 1
     for (const post of orderedPosts) {
       try {
         await updatePostInstanceStatus(post.id, 'generating')
@@ -93,15 +101,27 @@ export async function POST(
         const persona = idea.personas.find((p) => p.persona_type === post.persona_type)
         if (!persona) continue
 
-        // Create post folder with better naming: "UK Slideshow 1", "US Slideshow 2", etc.
         const countryLabel = COUNTRY_LABELS[post.country] || post.country.toUpperCase()
-        const postFolder = flatPhotos
-          ? (ideaFolder.folder('metadata') ?? ideaFolder)
-          : (ideaFolder.folder(post.country)?.folder(`${countryLabel} Slideshow ${post.post_index}`) ?? null)
-        const slidesFolder = flatPhotos
-          ? photosFolder
-          : (postFolder ? postFolder.folder('slides') : null)
-        if (!slidesFolder) continue
+        const safeCountryLabel = sanitizeFilename(countryLabel)
+        const safePersonaLabel = sanitizeFilename(post.persona_type)
+        const postIndexLabel = String(post.post_index).padStart(postIndexPad, '0')
+
+        let postFolder: JSZip | null = null
+        let slidesFolder: JSZip | null = null
+
+        if (!isFlat) {
+          // Create country folder
+          const countryFolder = ideaFolder?.folder(post.country)
+          if (!countryFolder) continue
+
+          // Create post folder with better naming: "UK Slideshow 1", "US Slideshow 2", etc.
+          postFolder = countryFolder.folder(`${countryLabel} Slideshow ${post.post_index}`)
+          if (!postFolder) continue
+
+          // Create slides folder
+          slidesFolder = postFolder.folder('slides')
+          if (!slidesFolder) continue
+        }
 
         // Render each slide – include ALL slides from the idea
         const slideChoices = getEffectiveSlideChoices(persona.slides, post.choices?.slides, post.country)
@@ -217,41 +237,44 @@ export async function POST(
         const slideMetadata: PostMetadata['slides'] = []
 
         // Process results and add to ZIP
-        const orderedResults = slideResults
-          .filter((r): r is NonNullable<typeof r> => Boolean(r))
-          .sort((a, b) => a.slideNumber - b.slideNumber)
-
-        for (const result of orderedResults) {
+        for (const result of slideResults) {
           if (!result) continue
           
-          slideBuffers.push({
-            slideNumber: result.slideNumber,
-            imageBuffer: result.imageBuffer,
-          })
+          const slideNumberLabel = String(result.slideNumber).padStart(2, '0')
 
-          const slideNo = String(result.slideNumber).padStart(2, '0')
-          if (flatPhotos) {
-            globalIndex += 1
-            const idx = String(globalIndex).padStart(4, '0')
-            const postNo = String(post.post_index).padStart(2, '0')
-            slidesFolder.file(`${idx}-${countryLabel}-S${postNo}-slide-${slideNo}.jpg`, result.imageBuffer)
-          } else {
-            slidesFolder.file(`slide-${slideNo}.jpg`, result.imageBuffer)
+          if (isFlat) {
+            const sequenceLabel = String(flatIndex).padStart(sequencePad, '0')
+            const filename = `${sequenceLabel}-${safeCountryLabel}-${postIndexLabel}-${safePersonaLabel}-slide-${slideNumberLabel}.png`
+            zip.file(filename, result.imageBuffer)
+            flatIndex += 1
+          } else if (slidesFolder) {
+            slidesFolder.file(
+              `slide-${slideNumberLabel}.png`,
+              result.imageBuffer
+            )
           }
 
-          slideMetadata.push({
-            slide_number: result.slideNumber,
-            slide_type: result.slide_type,
-            image_used: result.image_used,
-            text_variant_used: result.text_variant_used,
-            text_content: result.text_content,
-          })
+          if (includeVideos) {
+            slideBuffers.push({
+              slideNumber: result.slideNumber,
+              imageBuffer: result.imageBuffer,
+            })
+          }
+
+          if (!isFlat) {
+            slideMetadata.push({
+              slide_number: result.slideNumber,
+              slide_type: result.slide_type,
+              image_used: result.image_used,
+              text_variant_used: result.text_variant_used,
+              text_content: result.text_content,
+            })
+          }
         }
 
         // Skip video compilation for faster exports (can be enabled via query param)
         // Video compilation is very slow - users can compile videos separately if needed
-        const includeVideos = body.includeVideos === true
-        if (includeVideos && slideBuffers.length > 0) {
+        if (includeVideos && slideBuffers.length > 0 && postFolder) {
           await updatePostInstanceStatus(post.id, 'encoding')
           
           const videoResult = await compileVideo({
@@ -264,32 +287,26 @@ export async function POST(
           })
 
           if (videoResult.success && videoResult.videoBuffer) {
-            // `postFolder` can be null in flat export mode; video is optional anyway.
-            postFolder?.file('video.mp4', videoResult.videoBuffer)
+            postFolder.file('video.mp4', videoResult.videoBuffer)
           }
         }
 
-        // Create metadata.json
-        const metadata: PostMetadata = {
-          idea_id: ideaId,
-          idea_title: idea.title,
-          persona_type: post.persona_type,
-          country: post.country,
-          post_index: post.post_index,
-          seed: post.seed,
-          combo_key: post.combo_key,
-          choices: post.choices,
-          generated_at: new Date().toISOString(),
-          slides: slideMetadata,
-        }
+        if (!isFlat && postFolder) {
+          // Create metadata.json
+          const metadata: PostMetadata = {
+            idea_id: ideaId,
+            idea_title: idea.title,
+            persona_type: post.persona_type,
+            country: post.country,
+            post_index: post.post_index,
+            seed: post.seed,
+            combo_key: post.combo_key,
+            choices: post.choices,
+            generated_at: new Date().toISOString(),
+            slides: slideMetadata,
+          }
 
-        // In flatPhotos mode, keep metadata separate (avoid nesting in Photos folder)
-        if (flatPhotos) {
-          const metaFolder = ideaFolder.folder('metadata') ?? ideaFolder
-          const postNo = String(post.post_index).padStart(2, '0')
-          metaFolder.file(`${countryLabel}-S${postNo}-metadata.json`, JSON.stringify(metadata, null, 2))
-        } else {
-          postFolder?.file('metadata.json', JSON.stringify(metadata, null, 2))
+          postFolder.file('metadata.json', JSON.stringify(metadata, null, 2))
         }
 
         await updatePostInstanceStatus(post.id, 'complete')
@@ -315,11 +332,15 @@ export async function POST(
     // NextResponse expects BodyInit; Buffer types can fail TS checks in Next.js build.
     // Convert to Uint8Array for compatibility.
     const zipBody = new Uint8Array(zipBuffer)
+    const zipFilename = isFlat
+      ? `${sanitizeFilename(idea.title)}-photos.zip`
+      : `${sanitizeFilename(idea.title)}-export.zip`
+
     return new NextResponse(zipBody, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${ideaFolderName}-${flatPhotos ? 'photos' : 'export'}.zip"`,
+        'Content-Disposition': `attachment; filename="${zipFilename}"`,
         'Content-Length': String(zipBuffer.length),
       },
     })

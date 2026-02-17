@@ -14,7 +14,9 @@ interface GenerateAndExportButtonProps {
 export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExportButtonProps) {
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [progress, setProgress] = useState('')
+  const [downloadProgress, setDownloadProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [replaceExisting, setReplaceExisting] = useState(false)
@@ -23,27 +25,8 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
 
   const displayProgress = progress || exportProgress
 
-  const downloadZip = async () => {
-    setProgress('Downloading ZIP...')
-    const response = await fetch(`/api/ideas/${ideaId}/export`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ flatPhotos: true }),
-    })
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      throw new Error(data.error || 'ZIP export failed')
-    }
-
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${ideaTitle.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-')}-photos.zip`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
+  const sanitizeFilename = (name: string) =>
+    name.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-').slice(0, 50)
 
   const handleGenerateAndExport = async () => {
     setIsProcessing(true)
@@ -85,45 +68,50 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
     }
   }
 
-  const handleGenerateAndDownload = async () => {
-    setIsProcessing(true)
+  const handleDownloadFlatZip = async () => {
+    setIsDownloading(true)
     setError(null)
     setSuccess(null)
-    setProgress('Generating posts...')
+    setDownloadProgress('Preparing...')
 
     try {
-      const generateResponse = await fetch(`/api/ideas/${ideaId}/generate-posts`, {
+      const response = await fetch(`/api/ideas/${ideaId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: replaceExisting }),
+        body: JSON.stringify({ flat: true }),
       })
 
-      const generateData = await generateResponse.json()
-
-      if (!generateData.success) {
-        throw new Error(generateData.errors?.join(', ') || generateData.error || 'Failed to generate posts')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Download failed')
       }
 
-      setProgress(`Generated ${generateData.totalPosts} posts. Building ZIP...`)
-      await downloadZip()
+      setDownloadProgress('Downloading...')
+      const blob = await response.blob()
 
-      setProgress('')
-      setSuccess('Downloaded ZIP!')
-      router.refresh()
-      setTimeout(() => setSuccess(null), 6000)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${sanitizeFilename(ideaTitle)}-photos.zip`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      setDownloadProgress('Complete!')
+      setTimeout(() => setDownloadProgress(''), 2000)
     } catch (err: any) {
-      setError(err.message || 'Failed to generate and download')
+      setDownloadProgress('')
+      setError(err.message || 'Download failed')
     } finally {
-      setIsProcessing(false)
+      setIsDownloading(false)
     }
   }
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap justify-end">
         <Button
           onClick={handleGenerateAndExport}
-          disabled={isProcessing}
+          disabled={isProcessing || isDownloading}
           variant="default"
         >
         {isProcessing ? (
@@ -139,19 +127,19 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
         )}
       </Button>
         <Button
-          onClick={handleGenerateAndDownload}
-          disabled={isProcessing}
+          onClick={handleDownloadFlatZip}
+          disabled={isProcessing || isDownloading}
           variant="outline"
         >
-          {isProcessing ? (
+          {isDownloading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {displayProgress || 'Processing...'}
+              {downloadProgress || 'Downloading...'}
             </>
           ) : (
             <>
               <Download className="mr-2 h-4 w-4" />
-              Generate & Download ZIP
+              Download Photos (Flat ZIP)
             </>
           )}
         </Button>
@@ -161,6 +149,7 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
             checked={replaceExisting}
             onChange={(e) => setReplaceExisting(e.target.checked)}
             className="rounded border-border"
+            disabled={isProcessing || isDownloading}
           />
           Replace existing
         </label>
