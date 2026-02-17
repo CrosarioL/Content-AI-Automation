@@ -8,13 +8,12 @@ import {
 import { renderSlide, closeBrowser } from '@/lib/renderer'
 import { compileVideo } from '@/lib/video-compiler'
 import { COUNTRY_LABELS, COUNTRIES } from '@/lib/constants'
-import { getEffectiveSlideChoices, buildLayoutForSlide } from '@/lib/export-build-layouts'
+import { getEffectiveSlideChoices, buildLayoutForSlideWithMeta } from '@/lib/export-build-layouts'
 import type { 
   Persona, 
   Country, 
   PostInstance, 
   PostMetadata,
-  SlideLayoutConfig,
 } from '@/types'
 
 export const maxDuration = 300 // 5 minutes for full export
@@ -143,8 +142,9 @@ export async function POST(
           const slide = persona.slides.find((s) => s.slide_number === slideChoice.slide_number)
           if (!slide) return null
 
-          const layoutConfig = buildLayoutForSlide(slide, slideChoice, post.country, getImageUrl)
-          if (!layoutConfig) return null
+          const buildResult = buildLayoutForSlideWithMeta(slide, slideChoice, post.country, getImageUrl)
+          if (!buildResult) return null
+          const { layoutConfig, imageUrl, textContent } = buildResult
 
           // Render slide (node-canvas, no browser)
           const renderResult = await renderSlide({ layout: layoutConfig })
@@ -156,7 +156,7 @@ export async function POST(
               slide_type: slide.slide_type,
               image_used: imageUrl,
               text_variant_used: slideChoice.text_variant_index,
-              text_content: textPool?.content || '',
+              text_content: textContent,
             }
           }
           return null

@@ -66,12 +66,18 @@ export interface ExportPreparePayload {
   posts: ExportPostItem[]
 }
 
-export function buildLayoutForSlide(
+export interface ExportSlideBuildResult {
+  layoutConfig: SlideLayoutConfig
+  imageUrl?: string
+  textContent: string
+}
+
+export function buildLayoutForSlideWithMeta(
   slide: { slide_number: number; text_pools: any[]; image_pools?: any[] },
   slideChoice: { slide_number: number; text_variant_index: number; image_id?: string },
   postCountry: string,
   getImageUrl: (img: any) => string | undefined
-): SlideLayoutConfig | null {
+): ExportSlideBuildResult | null {
   let textPool = slide.text_pools.find(
     (t) => t.country === postCountry && t.variant_index === slideChoice.text_variant_index
   )
@@ -103,9 +109,10 @@ export function buildLayoutForSlide(
     imageUrl = getImageUrl(selectedImage)
   }
 
+  let layoutConfig: SlideLayoutConfig
   if (textPool?.layout_config) {
     const savedLayout = textPool.layout_config as SlideLayoutConfig
-    return {
+    layoutConfig = {
       ...savedLayout,
       background: {
         color: savedLayout.background?.color || '#0F1A2C',
@@ -138,33 +145,49 @@ export function buildLayoutForSlide(
             }]
           : [],
     }
+  } else {
+    layoutConfig = {
+      version: 1,
+      canvas: { width: 1080, height: 1920 },
+      safeZone: { top: 180, bottom: 220 },
+      background: { color: '#0F1A2C', image: imageUrl },
+      layers: textPool?.content
+        ? [{
+            id: `auto-${slide.slide_number}`,
+            type: 'text' as const,
+            text: textPool.content,
+            fontFamily: '"Inter", sans-serif',
+            fontWeight: '700',
+            fontSize: 60,
+            color: '#ffffff',
+            strokeColor: '#000000',
+            strokeWidth: 4,
+            background: 'transparent',
+            align: 'center' as const,
+            position: { x: 540, y: 960 },
+            size: { width: 700, height: 200 },
+            rotation: 0,
+            scale: { x: 1, y: 1 },
+            opacity: 1,
+            zIndex: 0,
+          }]
+        : [],
+    }
   }
 
   return {
-    version: 1,
-    canvas: { width: 1080, height: 1920 },
-    safeZone: { top: 180, bottom: 220 },
-    background: { color: '#0F1A2C', image: imageUrl },
-    layers: textPool?.content
-      ? [{
-          id: `auto-${slide.slide_number}`,
-          type: 'text' as const,
-          text: textPool.content,
-          fontFamily: '"Inter", sans-serif',
-          fontWeight: '700',
-          fontSize: 60,
-          color: '#ffffff',
-          strokeColor: '#000000',
-          strokeWidth: 4,
-          background: 'transparent',
-          align: 'center' as const,
-          position: { x: 540, y: 960 },
-          size: { width: 700, height: 200 },
-          rotation: 0,
-          scale: { x: 1, y: 1 },
-          opacity: 1,
-          zIndex: 0,
-        }]
-      : [],
+    layoutConfig,
+    imageUrl,
+    textContent: textPool?.content || '',
   }
+}
+
+export function buildLayoutForSlide(
+  slide: { slide_number: number; text_pools: any[]; image_pools?: any[] },
+  slideChoice: { slide_number: number; text_variant_index: number; image_id?: string },
+  postCountry: string,
+  getImageUrl: (img: any) => string | undefined
+): SlideLayoutConfig | null {
+  const result = buildLayoutForSlideWithMeta(slide, slideChoice, postCountry, getImageUrl)
+  return result ? result.layoutConfig : null
 }
