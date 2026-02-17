@@ -31,6 +31,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const requestedPersonas = body.personas as Persona[] | undefined
     const requestedCountries = body.countries as Country[] | undefined
+    const flatPhotos = body.flatPhotos === true
 
     // Get idea with full structure
     const idea = await getIdeaWithDetailsV2(ideaId)
@@ -63,14 +64,28 @@ export async function POST(
 
     // Create ZIP
     const zip = new JSZip()
-    const ideaFolder = zip.folder(sanitizeFilename(idea.title))
+    const ideaFolderName = sanitizeFilename(idea.title)
+    const ideaFolder = zip.folder(ideaFolderName)
     
     if (!ideaFolder) {
       throw new Error('Failed to create ZIP folder')
     }
 
+    // Optional: "one folder of photos" mode for iPad (minimize nesting)
+    const photosFolder = flatPhotos ? (ideaFolder.folder('Photos') ?? ideaFolder) : null
+
     // Process each post (keep browser open across posts for better performance)
-    for (const post of posts) {
+    const orderedPosts = [...posts].sort((a, b) => {
+      const c = String(a.country).localeCompare(String(b.country))
+      if (c !== 0) return c
+      const p = (a.post_index ?? 0) - (b.post_index ?? 0)
+      if (p !== 0) return p
+      return String(a.persona_type).localeCompare(String(b.persona_type))
+    })
+
+    let globalIndex = 0
+
+    for (const post of orderedPosts) {
       try {
         await updatePostInstanceStatus(post.id, 'generating')
         
@@ -78,17 +93,14 @@ export async function POST(
         const persona = idea.personas.find((p) => p.persona_type === post.persona_type)
         if (!persona) continue
 
-        // Create country folder
-        const countryFolder = ideaFolder.folder(post.country)
-        if (!countryFolder) continue
-
         // Create post folder with better naming: "UK Slideshow 1", "US Slideshow 2", etc.
         const countryLabel = COUNTRY_LABELS[post.country] || post.country.toUpperCase()
-        const postFolder = countryFolder.folder(`${countryLabel} Slideshow ${post.post_index}`)
-        if (!postFolder) continue
-
-        // Create slides folder
-        const slidesFolder = postFolder.folder('slides')
+        const postFolder = flatPhotos
+          ? (ideaFolder.folder('metadata') ?? ideaFolder)
+          : (ideaFolder.folder(post.country)?.folder(`${countryLabel} Slideshow ${post.post_index}`) ?? null)
+        const slidesFolder = flatPhotos
+          ? photosFolder
+          : (postFolder ? postFolder.folder('slides') : null)
         if (!slidesFolder) continue
 
         // Render each slide – include ALL slides from the idea
@@ -205,7 +217,11 @@ export async function POST(
         const slideMetadata: PostMetadata['slides'] = []
 
         // Process results and add to ZIP
-        for (const result of slideResults) {
+        const orderedResults = slideResults
+          .filter((r): r is NonNullable<typeof r> => Boolean(r))
+          .sort((a, b) => a.slideNumber - b.slideNumber)
+
+        for (const result of orderedResults) {
           if (!result) continue
           
           slideBuffers.push({
@@ -213,10 +229,15 @@ export async function POST(
             imageBuffer: result.imageBuffer,
           })
 
-          slidesFolder.file(
-            `slide-${String(result.slideNumber).padStart(2, '0')}.jpg`,
-            result.imageBuffer
-          )
+          const slideNo = String(result.slideNumber).padStart(2, '0')
+          if (flatPhotos) {
+            globalIndex += 1
+            const idx = String(globalIndex).padStart(4, '0')
+            const postNo = String(post.post_index).padStart(2, '0')
+            slidesFolder.file(`${idx}-${countryLabel}-S${postNo}-slide-${slideNo}.jpg`, result.imageBuffer)
+          } else {
+            slidesFolder.file(`slide-${slideNo}.jpg`, result.imageBuffer)
+          }
 
           slideMetadata.push({
             slide_number: result.slideNumber,
@@ -261,7 +282,14 @@ export async function POST(
           slides: slideMetadata,
         }
 
-        postFolder.file('metadata.json', JSON.stringify(metadata, null, 2))
+        // In flatPhotos mode, keep metadata separate (avoid nesting in Photos folder)
+        if (flatPhotos) {
+          const metaFolder = ideaFolder.folder('metadata') ?? ideaFolder
+          const postNo = String(post.post_index).padStart(2, '0')
+          metaFolder.file(`${countryLabel}-S${postNo}-metadata.json`, JSON.stringify(metadata, null, 2))
+        } else {
+          postFolder?.file('metadata.json', JSON.stringify(metadata, null, 2))
+        }
 
         await updatePostInstanceStatus(post.id, 'complete')
       } catch (postError: any) {
@@ -290,7 +318,7 @@ export async function POST(
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${sanitizeFilename(idea.title)}-export.zip"`,
+        'Content-Disposition': `attachment; filename="${ideaFolderName}-${flatPhotos ? 'photos' : 'export'}.zip"`,
         'Content-Length': String(zipBuffer.length),
       },
     })

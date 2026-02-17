@@ -28,7 +28,7 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
     const response = await fetch(`/api/ideas/${ideaId}/export`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ flatPhotos: true }),
     })
 
     if (!response.ok) {
@@ -40,7 +40,7 @@ export function GenerateAndExportButton({ ideaId, ideaTitle }: GenerateAndExport
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${ideaTitle.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-')}-export.zip`
+    link.download = `${ideaTitle.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-')}-photos.zip`
     link.click()
     URL.revokeObjectURL(url)
   }
