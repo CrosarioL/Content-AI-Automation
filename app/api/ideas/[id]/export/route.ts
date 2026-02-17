@@ -264,7 +264,8 @@ export async function POST(
           })
 
           if (videoResult.success && videoResult.videoBuffer) {
-            postFolder.file('video.mp4', videoResult.videoBuffer)
+            // `postFolder` can be null in flat export mode; video is optional anyway.
+            postFolder?.file('video.mp4', videoResult.videoBuffer)
           }
         }
 
