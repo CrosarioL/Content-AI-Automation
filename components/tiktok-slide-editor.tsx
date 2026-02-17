@@ -94,6 +94,12 @@ const FONT_OPTIONS = [
   { label: 'Clean Bold', fontFamily: '"Inter", "SF Pro Display", sans-serif', fontWeight: '800' },
   { label: 'Rounded', fontFamily: 'var(--font-nunito), Nunito, "Arial Rounded MT Bold", sans-serif', fontWeight: '800' },
   { label: 'Classic Sans', fontFamily: '"Arial", "Helvetica", sans-serif', fontWeight: '700' },
+  // TikTok in-app lookalikes (legal + close)
+  { label: 'Elegance (Serif)', fontFamily: 'var(--font-playfair), "Playfair Display", serif', fontWeight: '700' },
+  { label: 'Typewriter', fontFamily: 'var(--font-source-code-pro), "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontWeight: '700' },
+  { label: 'Handwriting', fontFamily: 'var(--font-yesteryear), "Yesteryear", cursive', fontWeight: '400' },
+  { label: 'Neon (Geometric)', fontFamily: 'var(--font-abel), Abel, system-ui, sans-serif', fontWeight: '400' },
+  { label: 'Serif', fontFamily: 'var(--font-libre-baskerville), "Libre Baskerville", Georgia, serif', fontWeight: '700' },
 ]
 
 // TikTok-style presets - authentic look
@@ -1131,6 +1137,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
                     className="w-full rounded-md border border-border bg-muted/40 px-2 py-2 text-sm"
                   >
                     {/* Map labels to visual thickness in TikTok Sans */}
+                    <option value="400">Normal</option>
                     <option value="500">Regular (TikTok default)</option>
                     <option value="600">Semi-bold</option>
                     <option value="700">Bold</option>
