@@ -137,6 +137,19 @@ async function buildKonvaStage(layout: SlideLayoutConfig): Promise<Konva.Stage> 
     }
   }
 
+  const exportOverlay = layout.metadata?.exportOverlay as { color?: string; opacity?: number } | undefined
+  if (exportOverlay?.color && typeof exportOverlay.opacity === 'number') {
+    const opacity = Math.max(0, Math.min(exportOverlay.opacity, 1))
+    if (opacity > 0) {
+      bgLayer.add(new Konva.Rect({
+        x: 0, y: 0,
+        width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
+        fill: exportOverlay.color,
+        opacity,
+      }))
+    }
+  }
+
   stage.add(bgLayer)
 
   // Create a canvas for text measurement (node-canvas)
@@ -281,7 +294,7 @@ export async function renderSlide(options: RenderSlideOptions): Promise<RenderSl
 
     const stage = await buildKonvaStage(layout)
 
-    const dataUrl = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.85 })
+    const dataUrl = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.9 })
     const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '')
     const imageBuffer = Buffer.from(base64, 'base64')
 

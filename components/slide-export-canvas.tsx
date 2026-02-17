@@ -79,6 +79,10 @@ export function SlideExportCanvas({
   const [readyFired, setReadyFired] = useState(false)
 
   const bgColor = layout.background?.color || '#0F1A2C'
+  const exportOverlay = layout.metadata?.exportOverlay as { color?: string; opacity?: number } | undefined
+  const overlayOpacity = typeof exportOverlay?.opacity === 'number'
+    ? Math.max(0, Math.min(exportOverlay.opacity, 1))
+    : 0
   const layers = [...(layout.layers || [])].sort((a, b) => a.zIndex - b.zIndex)
 
   const bgLayout = useMemo(
@@ -168,6 +172,17 @@ export function SlideExportCanvas({
             y={bgLayout.y}
             width={bgLayout.width}
             height={bgLayout.height}
+            listening={false}
+          />
+        )}
+        {exportOverlay?.color && overlayOpacity > 0 && (
+          <Rect
+            x={0}
+            y={0}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            fill={exportOverlay.color}
+            opacity={overlayOpacity}
             listening={false}
           />
         )}

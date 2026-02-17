@@ -25,7 +25,7 @@ function renderSlideToDataUrl(layoutConfig: SlideLayoutConfig): Promise<string> 
       try {
         const stage = stageRef.current
         if (stage) {
-          const dataUrl = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.85 })
+          const dataUrl = stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.9 })
           resolve(dataUrl)
         } else {
           reject(new Error('Stage ref not ready'))

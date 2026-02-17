@@ -66,6 +66,17 @@ export interface ExportPreparePayload {
   posts: ExportPostItem[]
 }
 
+const EXPORT_OVERLAY_OPACITY = 0.03
+const EXPORT_OVERLAY_COLORS = ['#ff0000', '#00ff00', '#0000ff']
+
+function getExportOverlay(slideNumber: number): { color: string; opacity: number } {
+  const index = Math.abs((slideNumber ?? 1) - 1) % EXPORT_OVERLAY_COLORS.length
+  return {
+    color: EXPORT_OVERLAY_COLORS[index],
+    opacity: EXPORT_OVERLAY_OPACITY,
+  }
+}
+
 export interface ExportSlideBuildResult {
   layoutConfig: SlideLayoutConfig
   imageUrl?: string
@@ -173,6 +184,11 @@ export function buildLayoutForSlideWithMeta(
           }]
         : [],
     }
+  }
+
+  layoutConfig.metadata = {
+    ...(layoutConfig.metadata || {}),
+    exportOverlay: getExportOverlay(slide.slide_number),
   }
 
   return {

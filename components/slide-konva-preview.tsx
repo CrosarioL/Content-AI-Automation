@@ -94,6 +94,10 @@ export function SlideKonvaPreview({
   const bgImageUrl = backgroundImageUrl ?? layout.background?.image
   const backgroundImage = useKonvaImage(bgImageUrl)
   const bgColor = layout.background?.color || '#0F1A2C'
+  const exportOverlay = layout.metadata?.exportOverlay as { color?: string; opacity?: number } | undefined
+  const overlayOpacity = typeof exportOverlay?.opacity === 'number'
+    ? Math.max(0, Math.min(exportOverlay.opacity, 1))
+    : 0
   const layers = [...(layout.layers || [])].sort((a, b) => a.zIndex - b.zIndex)
   const CANVAS_WIDTH = layout.canvas?.width ?? DEFAULT_WIDTH
   const CANVAS_HEIGHT = layout.canvas?.height ?? DEFAULT_HEIGHT
@@ -205,6 +209,17 @@ export function SlideKonvaPreview({
                 y={bgLayout.y}
                 width={bgLayout.width}
                 height={bgLayout.height}
+                listening={false}
+              />
+            )}
+            {exportOverlay?.color && overlayOpacity > 0 && (
+              <Rect
+                x={0}
+                y={0}
+                width={CANVAS_WIDTH}
+                height={CANVAS_HEIGHT}
+                fill={exportOverlay.color}
+                opacity={overlayOpacity}
                 listening={false}
               />
             )}

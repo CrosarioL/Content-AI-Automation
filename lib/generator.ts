@@ -37,6 +37,13 @@ interface SlideChoice {
   text_variant_index: 1 | 2 // Which text variant was chosen
 }
 
+interface SlideOptions {
+  slide_number: number
+  slide_type: string
+  imageIds: Array<string | undefined>
+  textIndices: (1 | 2)[]
+}
+
 interface ComboVector {
   choices: SlideChoice[]
   key: string // hash of the choice vector
@@ -81,6 +88,106 @@ function shuffle<T>(array: T[], random: () => number): T[] {
   return result
 }
 
+function buildSlideOptions(slides: PersonaSlideWithPools[], country: Country): SlideOptions[] {
+  return slides.map((slide) => {
+    const imageIds = slide.image_pools.map((img) => img.id).filter(Boolean)
+    const normalizedImageIds = imageIds.length > 0 ? imageIds : [undefined]
+
+    // Only use text variants for this country
+    const textPools = slide.text_pools.filter((t) => t.country === country)
+    const textIndices = textPools.length > 0
+      ? [...new Set(textPools.map((t) => t.variant_index as 1 | 2))]
+      : [1]
+
+    return {
+      slide_number: slide.slide_number,
+      slide_type: slide.slide_type,
+      imageIds: normalizedImageIds,
+      textIndices,
+    }
+  })
+}
+
+function buildHookAssignments(
+  slideOptions: SlideOptions[],
+  count: number,
+  random: () => number
+): Map<number, { imageIds: Array<string | undefined>; textIndices: (1 | 2)[] }> {
+  const assignments = new Map<number, { imageIds: Array<string | undefined>; textIndices: (1 | 2)[] }>()
+  const hookSlides = slideOptions.filter((opt) => opt.slide_type === 'hook')
+  if (hookSlides.length === 0 || count <= 0) return assignments
+
+  for (const hook of hookSlides) {
+    const uniqueImages = hook.imageIds.filter(Boolean) as string[]
+    let imageOrder: Array<string | undefined> = Array(count).fill(undefined)
+    if (uniqueImages.length > 0) {
+      const shuffledImages = shuffle(uniqueImages, random)
+      if (shuffledImages.length >= count) {
+        imageOrder = shuffledImages.slice(0, count)
+      } else {
+        imageOrder = Array.from({ length: count }, (_, i) => shuffledImages[i % shuffledImages.length])
+      }
+    }
+
+    const textVariants = [...hook.textIndices].sort((a, b) => a - b)
+    const textOrder = Array.from({ length: count }, (_, i) => textVariants[i % textVariants.length])
+
+    assignments.set(hook.slide_number, {
+      imageIds: imageOrder,
+      textIndices: textOrder,
+    })
+  }
+
+  return assignments
+}
+
+function applyHookOverrides(
+  selected: ComboVector[],
+  hookAssignments: Map<number, { imageIds: Array<string | undefined>; textIndices: (1 | 2)[] }>
+): void {
+  if (hookAssignments.size === 0) return
+  for (let i = 0; i < selected.length; i++) {
+    const combo = selected[i]
+    for (const [slideNumber, assignment] of hookAssignments.entries()) {
+      const choice = combo.choices.find((c) => c.slide_number === slideNumber)
+      if (!choice) continue
+      const imageId = assignment.imageIds[i]
+      const textIndex = assignment.textIndices[i]
+      if (imageId !== undefined) choice.image_id = imageId
+      if (textIndex !== undefined) choice.text_variant_index = textIndex
+    }
+    combo.key = generateComboKey(combo.choices)
+  }
+}
+
+function mutateComboForUniqueness(
+  combo: ComboVector,
+  slideOptions: SlideOptions[],
+  random: () => number,
+  hookSlideNumbers: Set<number>
+): boolean {
+  const mutableOptions = slideOptions.filter((opt) => !hookSlideNumbers.has(opt.slide_number))
+  if (mutableOptions.length === 0) return false
+  const target = mutableOptions[Math.floor(random() * mutableOptions.length)]
+  const choice = combo.choices.find((c) => c.slide_number === target.slide_number)
+  if (!choice) return false
+
+  const pickDifferent = <T,>(current: T, options: T[]) => {
+    if (options.length <= 1) return current
+    let next = current
+    let attempts = 0
+    while (next === current && attempts < 4) {
+      next = options[Math.floor(random() * options.length)]
+      attempts += 1
+    }
+    return next
+  }
+
+  choice.image_id = pickDifferent(choice.image_id, target.imageIds)
+  choice.text_variant_index = pickDifferent(choice.text_variant_index, target.textIndices)
+  return true
+}
+
 // Calculate "distance" between two combo vectors (hamming-like)
 function comboDistance(a: SlideChoice[], b: SlideChoice[]): number {
   let dist = 0
@@ -112,32 +219,11 @@ interface GenerateOptions {
 }
 
 function generateCandidateCombos(
-  slides: PersonaSlideWithPools[],
-  country: Country,
+  slideOptions: SlideOptions[],
   random: () => number,
   limit: number = 1000
 ): ComboVector[] {
   const candidates: ComboVector[] = []
-  
-  // For each slide, get possible choices
-  const slideOptions: Array<{ slide_number: number; imageIds: string[]; textIndices: (1 | 2)[] }> = []
-  
-  for (const slide of slides) {
-    const imageIds = slide.image_pools.map((img) => img.id)
-    if (imageIds.length === 0) imageIds.push('') // No image = empty string
-    
-    // Only use text variants for this country
-    const textPools = slide.text_pools.filter((t) => t.country === country)
-    const textIndices: (1 | 2)[] = textPools.length > 0 
-      ? [...new Set(textPools.map((t) => t.variant_index as 1 | 2))]
-      : [1] // Default to variant 1 if no text
-    
-    slideOptions.push({
-      slide_number: slide.slide_number,
-      imageIds,
-      textIndices,
-    })
-  }
   
   // Generate random candidates
   for (let i = 0; i < limit; i++) {
@@ -200,15 +286,33 @@ async function generatePostsForCountry(options: GenerateOptions): Promise<PostIn
   
   const seed = generateSeed(ideaId, persona, country, timestamp)
   const random = seededRandom(seed)
+
+  const slideOptions = buildSlideOptions(slides, country)
   
   // Generate candidate combinations
-  const candidates = generateCandidateCombos(slides, country, random, 500)
+  const candidates = generateCandidateCombos(slideOptions, random, 500)
   
   // How many slots are available (1..POSTS_PER_COUNTRY)
   const availableIndexes = [1, 2, 3, 4, 5, 6, 7].filter((i) => !existingPostIndexes.has(i))
   const slotsToFill = Math.min(availableIndexes.length, POSTS_PER_COUNTRY - existingPostIndexes.size)
   
+  const hookAssignments = buildHookAssignments(slideOptions, slotsToFill, random)
+  const hookSlideNumbers = new Set(Array.from(hookAssignments.keys()))
+
   const selected = selectDiverseCombos(candidates, existingKeys, slotsToFill)
+  applyHookOverrides(selected, hookAssignments)
+  const usedKeys = new Set(existingKeys)
+  for (const combo of selected) {
+    combo.key = generateComboKey(combo.choices)
+    let attempts = 0
+    while (usedKeys.has(combo.key) && attempts < 6) {
+      const mutated = mutateComboForUniqueness(combo, slideOptions, random, hookSlideNumbers)
+      if (!mutated) break
+      combo.key = generateComboKey(combo.choices)
+      attempts += 1
+    }
+    usedKeys.add(combo.key)
+  }
   
   const posts: PostInstance[] = []
   
