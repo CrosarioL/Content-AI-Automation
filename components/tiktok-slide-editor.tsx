@@ -21,8 +21,31 @@ import {
 import type { SlideLayoutConfig, SlideTextLayer } from '@/types'
 import { Button } from '@/components/ui/button'
 import { SlideKonvaPreview } from '@/components/slide-konva-preview'
+import { getErrorMessageFromResponse } from '@/lib/utils'
+import { prepareImageFileForUpload } from '@/lib/client-image'
 
 const CLIPBOARD_KEY = 'hayattime-layer-clipboard'
+
+function normalizeHexColorForPicker(value: string | null | undefined, fallback: string): string {
+  const raw = (value || '').trim().toLowerCase()
+  if (!raw || raw === 'transparent') return fallback
+  if (/^#[0-9a-f]{6}$/.test(raw)) return raw
+  if (/^#[0-9a-f]{3}$/.test(raw)) {
+    const r = raw[1]
+    const g = raw[2]
+    const b = raw[3]
+    return `#${r}${r}${g}${g}${b}${b}`
+  }
+  const rgb = raw.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:\d*\.?\d+))?\s*\)$/)
+  if (rgb) {
+    const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
+    const r = toHex(Number(rgb[1]))
+    const g = toHex(Number(rgb[2]))
+    const b = toHex(Number(rgb[3]))
+    return `#${r}${g}${b}`
+  }
+  return fallback
+}
 
 // Helper to get canvas dimensions based on aspect ratio
 const getCanvasDimensions = (aspectRatio: import('@/types').AspectRatio = '9:16') => {
@@ -765,7 +788,8 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
     
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      const preparedFile = await prepareImageFileForUpload(file)
+      formData.append('file', preparedFile)
       formData.append('ideaId', variantId)
       formData.append('type', 'background')
       
@@ -775,8 +799,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
       })
       
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to upload background')
+        throw new Error(await getErrorMessageFromResponse(response))
       }
       
       const data = await response.json()
@@ -976,7 +999,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
                 <span className="text-xs text-muted-foreground">Color:</span>
                 <input
                   type="color"
-                  value={layout.background?.color || '#0F1A2C'}
+                  value={normalizeHexColorForPicker(layout.background?.color, '#0F1A2C')}
                   onChange={(e) => updateBackgroundColor(e.target.value)}
                   className="h-8 w-12 cursor-pointer rounded border border-border"
                 />
@@ -1192,7 +1215,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
                   </span>
                   <input
                     type="color"
-                    value={activeLayer.color}
+                    value={normalizeHexColorForPicker(activeLayer.color, '#ffffff')}
                     onChange={(e) => updateLayer(activeLayer.id, { color: e.target.value })}
                     className="h-10 w-full cursor-pointer rounded-md border border-border bg-muted/40"
                   />
@@ -1203,7 +1226,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
                   </span>
                   <input
                     type="color"
-                    value={activeLayer.background || '#000000'}
+                    value={normalizeHexColorForPicker(activeLayer.background, '#000000')}
                     onChange={(e) => updateLayer(activeLayer.id, { background: e.target.value })}
                     className="h-10 w-full cursor-pointer rounded-md border border-border bg-muted/40"
                   />
@@ -1241,7 +1264,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
                   </span>
                   <input
                     type="color"
-                    value={activeLayer.strokeColor || '#000000'}
+                    value={normalizeHexColorForPicker(activeLayer.strokeColor, '#000000')}
                     onChange={(e) => updateLayer(activeLayer.id, { strokeColor: e.target.value, preset: 'custom' })}
                     className="h-10 w-full cursor-pointer rounded-md border border-border bg-muted/40"
                   />
@@ -1273,7 +1296,7 @@ export const TiktokSlideEditor = forwardRef<TiktokSlideEditorHandle, TiktokSlide
                   </span>
                   <input
                     type="color"
-                    value={activeLayer.shadowColor?.replace(/rgba?\([^)]+\)/, '#000000') || '#000000'}
+                    value={normalizeHexColorForPicker(activeLayer.shadowColor, '#000000')}
                     onChange={(e) => updateLayer(activeLayer.id, { shadowColor: e.target.value, preset: 'custom' })}
                     className="h-10 w-full cursor-pointer rounded-md border border-border bg-muted/40"
                   />

@@ -7,6 +7,8 @@ import { PERSONAS, COUNTRIES, PERSONA_LABELS, COUNTRY_LABELS } from '@/lib/const
 import { TiktokSlideEditor } from '@/components/tiktok-slide-editor'
 import { SlideNavigator } from '@/components/slide-navigator'
 import { Layers, List } from 'lucide-react'
+import { getErrorMessageFromResponse } from '@/lib/utils'
+import { prepareImageFileForUpload } from '@/lib/client-image'
 import type { IdeaWithDetails, Persona, Country, SlideLayoutConfig } from '@/types'
 
 const SLIDE_TYPE_OPTIONS = [
@@ -442,7 +444,8 @@ export function IdeaForm({ mode, ideaId, initialIdea }: IdeaFormProps) {
 
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      const preparedFile = await prepareImageFileForUpload(file)
+      formData.append('file', preparedFile)
       formData.append('ideaId', ideaId || 'new-idea')
       formData.append('persona', personaType)
       formData.append('country', country)
@@ -455,8 +458,7 @@ export function IdeaForm({ mode, ideaId, initialIdea }: IdeaFormProps) {
       })
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to upload image')
+        throw new Error(await getErrorMessageFromResponse(response))
       }
 
       const data = await response.json()

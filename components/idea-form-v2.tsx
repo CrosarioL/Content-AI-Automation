@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { PERSONAS, COUNTRIES, PERSONA_LABELS, COUNTRY_LABELS } from '@/lib/constants'
 import { Plus, Trash2, Upload, Image as ImageIcon, X, Check, Sparkles } from 'lucide-react'
 import { TiktokSlideEditor, type TiktokSlideEditorHandle } from '@/components/tiktok-slide-editor'
+import { getErrorMessageFromResponse } from '@/lib/utils'
+import { prepareImageFileForUpload } from '@/lib/client-image'
 import type { 
   IdeaWithDetailsV2, 
   Persona, 
@@ -522,7 +524,8 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
       // Upload multiple files
       for (const file of Array.from(files)) {
         const formData = new FormData()
-        formData.append('file', file)
+        const preparedFile = await prepareImageFileForUpload(file)
+        formData.append('file', preparedFile)
         formData.append('ideaId', ideaId || 'new-idea')
         formData.append('persona', activePersona)
         formData.append('slide', slide.id)
@@ -534,8 +537,7 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
         })
 
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Failed to upload image')
+          throw new Error(await getErrorMessageFromResponse(response))
         }
 
         const data = await response.json()
