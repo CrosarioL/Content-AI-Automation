@@ -53,12 +53,18 @@ function getOAuthDriveClient() {
   return google.drive({ version: 'v3', auth: oAuth2Client })
 }
 
-// Prefer service account (no expiry). Use OAuth only if credentials are not set.
+// Prefer OAuth when set: uploads are owned by you and use your quota.
+// Service accounts have no storage quota, so uploads to your folder fail with quota error.
+// Use OAuth for Drive uploads; publish the OAuth app to Production so refresh tokens don't expire in 7 days.
 export function getDriveClient() {
-  if (process.env.GOOGLE_DRIVE_CREDENTIALS?.trim()) {
-    return getServiceAccountDriveClient()
+  if (
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID &&
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET &&
+    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN
+  ) {
+    return getOAuthDriveClient()
   }
-  return getOAuthDriveClient()
+  return getServiceAccountDriveClient()
 }
 
 export interface UploadToDriveOptions {
@@ -72,15 +78,15 @@ export async function uploadToGoogleDrive(
   options: UploadToDriveOptions
 ): Promise<{ fileId: string; webViewLink: string }> {
   const { fileBuffer, fileName, folderId, mimeType = 'application/zip' } = options
-  
+
   try {
     console.log('[google-drive] Getting Drive client...')
     const drive = getDriveClient()
-    
+
     const fileMetadata: any = {
       name: fileName,
     }
-    
+
     if (folderId) {
       fileMetadata.parents = [folderId]
       console.log('[google-drive] Uploading to folder:', folderId)
@@ -105,10 +111,6 @@ export async function uploadToGoogleDrive(
     }
 
     console.log('[google-drive] File created:', response.data.id)
-
-    // NOTE: We do NOT automatically make the file public.
-    // In OAuth mode, the uploading Google account already has access.
-    // In service-account mode, folder sharing should grant access.
 
     return {
       fileId: response.data.id,

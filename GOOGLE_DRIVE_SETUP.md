@@ -1,71 +1,31 @@
-# Google Drive export – one-time setup (no refresh tokens)
+# Google Drive export setup
 
-Use a **Service Account** so the app can upload to your Google Drive **without ever expiring**. No refresh tokens, no 7-day re-auth.
-
----
-
-## 1. Create a Google Cloud project (if you don’t have one)
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a project or select an existing one.
+For **personal Google accounts** (Gmail), the app uses **OAuth** so that uploads are owned by you and use **your** storage quota. Service accounts have no storage quota, so uploads created by a service account fail with a quota error even when the folder is shared.
 
 ---
 
-## 2. Enable the Drive API
+## Use OAuth (recommended for personal Drive)
 
-1. In the console: **APIs & Services** → **Library**.
-2. Search for **Google Drive API** and open it.
-3. Click **Enable**.
+1. **Google Cloud Console** → your project → **APIs & Services** → **Credentials**.
+2. Create **OAuth 2.0 Client ID** (Desktop or Web). Note **Client ID** and **Client secret**.
+3. Get a **refresh token** once (e.g. run `node get-drive-refresh-token.js` in this project, or use any OAuth playground that requests `https://www.googleapis.com/auth/drive.file`).
+4. Set in `.env.local` and on **Render**:
+   - `GOOGLE_DRIVE_OAUTH_CLIENT_ID`
+   - `GOOGLE_DRIVE_OAUTH_CLIENT_SECRET`
+   - `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN`
+   - `GOOGLE_DRIVE_FOLDER_ID` = folder ID from your Drive folder URL (`.../folders/FOLDER_ID`).
 
----
+### Avoid 7-day refresh token expiry
 
-## 3. Create a Service Account
+If your OAuth app is in **Testing** mode, refresh tokens expire after 7 days. To get a long-lived token:
 
-1. **APIs & Services** → **Credentials** → **Create credentials** → **Service account**.
-2. Name it (e.g. `content-generator-drive`) → **Create and continue** → **Done**.
-3. Open the new service account → **Keys** tab → **Add key** → **Create new key** → **JSON** → **Create**.  
-   A JSON file downloads (keep it private).
+1. In Google Cloud Console: **APIs & Services** → **OAuth consent screen**.
+2. Set **Publishing status** to **Production** (or add your Gmail as a test user and re-authorize to get a new refresh token when needed).
 
----
-
-## 4. Share your Drive folder with the service account
-
-1. Open the JSON file. Find **`client_email`** (e.g. `something@project-id.iam.gserviceaccount.com`).
-2. In Google Drive, open (or create) the folder where exports should go.
-3. **Right‑click the folder** → **Share**.
-4. Paste the **`client_email`** as a collaborator and give it **Editor** (or at least “can add files”).
-5. Copy the **folder ID** from the folder URL:  
-   `https://drive.google.com/drive/folders/**FOLDER_ID**`
+With **Production** status, refresh tokens don’t expire after 7 days.
 
 ---
 
-## 5. Set environment variables
+## Service account (optional)
 
-**Local (`.env.local`):**
-
-- `GOOGLE_DRIVE_CREDENTIALS` = full contents of the JSON file (one line, no line breaks), or the path to the file if your app supports that.
-- `GOOGLE_DRIVE_FOLDER_ID` = the folder ID from step 4.
-
-**Render (or other host):**
-
-- Add **GOOGLE_DRIVE_CREDENTIALS** as a secret: paste the **entire** JSON in one line (you can minify it).
-- Add **GOOGLE_DRIVE_FOLDER_ID** with the same folder ID.
-- **Remove** (or leave unset) the OAuth vars so the app uses the service account:
-  - `GOOGLE_DRIVE_OAUTH_CLIENT_ID`
-  - `GOOGLE_DRIVE_OAUTH_CLIENT_SECRET`
-  - `GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN`
-
-The app **prefers the service account** when `GOOGLE_DRIVE_CREDENTIALS` is set, so you don’t need to refresh tokens again.
-
----
-
-## Quick checklist
-
-- [ ] Drive API enabled in Google Cloud.
-- [ ] Service account created and JSON key downloaded.
-- [ ] Drive folder shared with the service account **client_email** (Editor).
-- [ ] `GOOGLE_DRIVE_CREDENTIALS` set (full JSON).
-- [ ] `GOOGLE_DRIVE_FOLDER_ID` set to that folder’s ID.
-- [ ] OAuth env vars removed or unset on the server so only the service account is used.
-
-After this, “Generate & Export to Drive” should work without any token refresh.
+Service accounts don’t have their own Drive quota. They are useful for **Google Workspace** with domain-wide delegation, or for non-upload flows. For uploading to a **personal** Drive folder, the app prefers **OAuth** when the OAuth env vars are set, so uploads use your quota. You can leave `GOOGLE_DRIVE_CREDENTIALS` set as a fallback; the app will use OAuth first if those three OAuth vars are present.
