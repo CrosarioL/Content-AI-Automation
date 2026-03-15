@@ -4,17 +4,22 @@ import { Readable } from 'stream'
 // =============================================
 // Auth helpers
 // =============================================
+//
+// Prefer SERVICE ACCOUNT: set GOOGLE_DRIVE_CREDENTIALS (JSON). No refresh tokens,
+// no expiry. Share your Drive folder with the service account's client_email.
+//
+// OAuth is fallback: requires refresh token; in Google "Testing" mode refresh
+// tokens expire in 7 days. Use service account to avoid that.
 
-// Service account auth (old path - requires Shared Drive)
 function getServiceAccountDriveClient() {
   const credentials = process.env.GOOGLE_DRIVE_CREDENTIALS
   if (!credentials) {
     throw new Error(
-      'GOOGLE_DRIVE_CREDENTIALS environment variable is not set. Either set this for service account mode or configure OAuth env vars.'
+      'GOOGLE_DRIVE_CREDENTIALS is not set. Use a service account for permanent access (no refresh tokens). See GOOGLE_DRIVE_SETUP.md.'
     )
   }
 
-  let creds
+  let creds: any
   try {
     creds = typeof credentials === 'string' ? JSON.parse(credentials) : credentials
   } catch (e) {
@@ -29,7 +34,6 @@ function getServiceAccountDriveClient() {
   return google.drive({ version: 'v3', auth })
 }
 
-// OAuth2 auth using YOUR Google account (no Workspace / Shared Drive required)
 function getOAuthDriveClient() {
   const clientId = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID
   const clientSecret = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET
@@ -39,7 +43,7 @@ function getOAuthDriveClient() {
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
-      'Google Drive OAuth env vars are not set. Please set GOOGLE_DRIVE_OAUTH_CLIENT_ID, GOOGLE_DRIVE_OAUTH_CLIENT_SECRET and GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN in .env.local.'
+      'Google Drive OAuth env vars are not set. For no-refresh setup use a service account (GOOGLE_DRIVE_CREDENTIALS). See GOOGLE_DRIVE_SETUP.md.'
     )
   }
 
@@ -49,19 +53,12 @@ function getOAuthDriveClient() {
   return google.drive({ version: 'v3', auth: oAuth2Client })
 }
 
-// Main entry: prefer OAuth (your account). Fallback to service account if configured.
+// Prefer service account (no expiry). Use OAuth only if credentials are not set.
 export function getDriveClient() {
-  // If OAuth env vars are present, use OAuth mode (uploads as your own Google account)
-  if (
-    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID &&
-    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET &&
-    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN
-  ) {
-    return getOAuthDriveClient()
+  if (process.env.GOOGLE_DRIVE_CREDENTIALS?.trim()) {
+    return getServiceAccountDriveClient()
   }
-
-  // Otherwise, fall back to legacy service account mode
-  return getServiceAccountDriveClient()
+  return getOAuthDriveClient()
 }
 
 export interface UploadToDriveOptions {
@@ -120,9 +117,15 @@ export async function uploadToGoogleDrive(
   } catch (error: any) {
     console.error('[google-drive] Upload error:', error)
 
-    // Provide more helpful error messages
+    const msg = error?.message ?? ''
+    const invalidGrant = msg.includes('invalid_grant') || error?.response?.data?.error === 'invalid_grant'
+
+    if (invalidGrant) {
+      throw new Error(
+        'Google OAuth refresh token expired or invalid. Use a Service Account instead (no refresh needed): set GOOGLE_DRIVE_CREDENTIALS and share your Drive folder with the service account email. See GOOGLE_DRIVE_SETUP.md.'
+      )
+    }
     if (error.code === 403) {
-      // Distinguish between quota issue and plain permission issue
       if (
         error.errors?.some(
           (e: any) =>
@@ -131,20 +134,21 @@ export async function uploadToGoogleDrive(
         )
       ) {
         throw new Error(
-          'Google Drive storage quota error. For service accounts, you must either use a Shared Drive or switch to OAuth mode using your own Google account.'
+          'Google Drive storage quota error. Share a folder in your personal Drive with the service account email so it uploads into your quota.'
         )
       }
-
       throw new Error(
-        'Permission denied. Make sure the target folder exists, you shared it with the account you are authenticating as, and Google Drive API is enabled.'
+        'Permission denied. Share the target folder with the service account email (in GOOGLE_DRIVE_CREDENTIALS as client_email), or check that Google Drive API is enabled.'
       )
-    } else if (error.code === 404) {
+    }
+    if (error.code === 404) {
       throw new Error(
-        'Folder not found. Check that the folder ID is correct and that the authenticated account can see it.'
+        'Folder not found. Check GOOGLE_DRIVE_FOLDER_ID and that the folder is shared with the service account email (client_email in credentials).'
       )
-    } else if (error.message?.includes('credentials')) {
+    }
+    if (msg.includes('credentials') || msg.includes('Credential')) {
       throw new Error(
-        'Invalid Google Drive credentials. For service accounts, check GOOGLE_DRIVE_CREDENTIALS. For OAuth, check GOOGLE_DRIVE_OAUTH_* env vars in .env.local.'
+        'Invalid Google Drive credentials. Use GOOGLE_DRIVE_CREDENTIALS (service account JSON). See GOOGLE_DRIVE_SETUP.md.'
       )
     }
 
