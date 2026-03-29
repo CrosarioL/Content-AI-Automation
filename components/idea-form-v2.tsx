@@ -7,6 +7,7 @@ import { PERSONAS, COUNTRIES, PERSONA_LABELS, COUNTRY_LABELS } from '@/lib/const
 import { Plus, Trash2, Upload, Image as ImageIcon, X, Check, Sparkles } from 'lucide-react'
 import { TiktokSlideEditor, type TiktokSlideEditorHandle } from '@/components/tiktok-slide-editor'
 import { getErrorMessageFromResponse } from '@/lib/utils'
+import { ClaudePasteParser, type ParsedSlideText } from '@/components/claude-paste-parser'
 import { prepareImageFileForUpload } from '@/lib/client-image'
 import type { 
   IdeaWithDetailsV2, 
@@ -581,6 +582,24 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
   // Submit
   // ============================================
 
+  const handleParsedScript = (parsedSlides: ParsedSlideText[]) => {
+    for (const parsed of parsedSlides) {
+      const slideIndex = parsed.slideIndex
+      if (slideIndex >= activePersonaData.slides.length) continue
+      const applyText = (country: Country, variantIndex: 1 | 2, text: string) => {
+        if (!text.trim()) return
+        const slide = activePersonaData.slides[slideIndex]
+        if (!slide) return
+        const layerId = slide.layoutConfig.layers[0]?.id || 'default'
+        updateLayerTexts(activePersona, slideIndex, country, variantIndex, { [layerId]: text })
+      }
+      applyText('uk', 1, parsed.uk_v1)
+      applyText('uk', 2, parsed.uk_v2)
+      applyText('us', 1, parsed.us_v1)
+      applyText('us', 2, parsed.us_v2)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -801,6 +820,7 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
               Slides – {PERSONA_LABELS[activePersona]}
             </h3>
             <div className="flex gap-2">
+              <ClaudePasteParser onParsed={handleParsedScript} slideCount={activePersonaData.slides.length} />
               <Button
                 type="button"
                 variant="outline"
