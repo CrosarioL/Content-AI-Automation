@@ -36,10 +36,11 @@ rl.question('Paste the code here: ', async (code) => {
     console.log(
       '\nYour REFRESH TOKEN (put this into .env.local as GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN):\n'
     )
-    console.log(
-      tokens.refresh_token ||
-        'NO refresh_token returned – make sure you used prompt=consent and access_type=offline.'
-    )
+    const refresh = tokens.refresh_token ||
+      'NO refresh_token returned – make sure you used prompt=consent and access_type=offline.'
+    console.log(refresh)
+    console.log('\n4) Put this in .env.local as GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN')
+    console.log('5) Put the same value in Render → Environment → GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN, then redeploy.')
   } catch (err) {
     console.error('Error getting tokens:', err)
   }
