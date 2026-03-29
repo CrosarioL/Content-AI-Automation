@@ -39,7 +39,7 @@ function parseClaudeOutput(raw: string): ParsedSlideText[] {
 
   // Split on slide headers: **SLIDE N** or **SLIDE N — TYPE** or --- separators
   // Also handle markdown headers like ## SLIDE 1
-  const slideBlocks = raw.split(/(?=\*\*SLIDE\s+\d+|##\s*SLIDE\s+\d+)/i).filter(Boolean)
+  const slideBlocks = raw.split(/(?=\*{0,2}SLIDE\s+\d+|##\s*SLIDE\s+\d+)/i).filter(Boolean)
 
   for (const block of slideBlocks) {
     // Extract slide number
@@ -54,7 +54,7 @@ function parseClaudeOutput(raw: string): ParsedSlideText[] {
     // Handle formats: 1. *"text"* or 1. "text" or 1. text
     const variants: string[] = []
 
-    const variantRegex = /^\s*(\d+)\.\s*\*?"?([^*\n]+)"?\*?\s*$/gm
+    const variantRegex = /^\s*(\d+)\.\s*\*{0,1}"?([^*\n]+)"?\*{0,1}\s*$/gm
     let match
     while ((match = variantRegex.exec(block)) !== null) {
       const variantNum = parseInt(match[1], 10)
