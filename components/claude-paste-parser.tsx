@@ -50,19 +50,31 @@ function parseClaudeOutput(raw: string): ParsedSlideText[] {
     const slideIndex = slideNum - 1 // 0-based
     const slideType = SLIDE_TYPES[Math.min(slideIndex, SLIDE_TYPES.length - 1)]
 
-    // Extract numbered variants: lines starting with 1. 2. 3. 4.
-    // Handle formats: 1. *"text"* or 1. "text" or 1. text
+    // Extract variants — supports two formats:
+    // Format A (numbered):  1. *"text"*  /  1. "text"  /  1. text
+    // Format B (plain):     "text"  or bare lines (one per line, 4 lines = uk_v1..us_v2)
     const variants: string[] = []
 
+    // Try Format A first: numbered lines
     const variantRegex = /^\s*(\d+)\.\s*\*{0,1}"?([^*\n]+)"?\*{0,1}\s*$/gm
     let match
     while ((match = variantRegex.exec(block)) !== null) {
       const variantNum = parseInt(match[1], 10)
       let text = match[2].trim()
-      // Clean up surrounding quotes and asterisks
       text = text.replace(/^\*?"?|"?\*?$/g, '').trim()
       text = text.replace(/^["']|["']$/g, '').trim()
       variants[variantNum - 1] = text
+    }
+
+    // Format B fallback: plain quoted or unquoted lines (skip the header line)
+    if (variants.filter(Boolean).length < 2) {
+      const lines = block
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !/^(\*{0,2}SLIDE\s+\d+|##\s*SLIDE)/i.test(l)) // skip header
+        .map((l) => l.replace(/^["']|["']$/g, '').trim())                   // strip outer quotes
+        .filter(Boolean)
+      lines.forEach((text, i) => { variants[i] = text })
     }
 
     // Need at least 2 variants
