@@ -586,17 +586,53 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
     for (const parsed of parsedSlides) {
       const slideIndex = parsed.slideIndex
       if (slideIndex >= activePersonaData.slides.length) continue
-      const applyText = (country: Country, variantIndex: 1 | 2, text: string) => {
-        if (!text.trim()) return
-        const slide = activePersonaData.slides[slideIndex]
-        if (!slide) return
-        const layerId = slide.layoutConfig.layers[0]?.id || 'default'
-        updateLayerTexts(activePersona, slideIndex, country, variantIndex, { [layerId]: text })
-      }
-      applyText('uk', 1, parsed.uk_v1)
-      applyText('uk', 2, parsed.uk_v2)
-      applyText('us', 1, parsed.us_v1)
-      applyText('us', 2, parsed.us_v2)
+
+      // Single atomic update per slide — creates a default layer if none exists
+      updateSlide(activePersona, slideIndex, (slide) => {
+        // Resolve or create the text layer
+        let layerId = slide.layoutConfig.layers[0]?.id
+        let layoutConfig = slide.layoutConfig
+
+        if (!layerId) {
+          layerId = randomId()
+          const { canvas, safeZone } = slide.layoutConfig
+          const defaultLayer: SlideTextLayer = {
+            id: layerId,
+            type: 'text',
+            text: '',
+            fontFamily: 'Inter',
+            fontWeight: '600',
+            fontSize: 52,
+            color: '#FFFFFF',
+            align: 'center',
+            position: { x: 60, y: (safeZone?.top ?? 180) + 40 },
+            size: {
+              width: canvas.width - 120,
+              height: canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80,
+            },
+            rotation: 0,
+            scale: { x: 1, y: 1 },
+            opacity: 1,
+            zIndex: 1,
+          }
+          layoutConfig = { ...slide.layoutConfig, layers: [defaultLayer] }
+        }
+
+        const variantMap: Record<string, string> = {
+          'uk-1': parsed.uk_v1,
+          'uk-2': parsed.uk_v2,
+          'us-1': parsed.us_v1,
+          'us-2': parsed.us_v2,
+        }
+
+        const textVariants = slide.textVariants.map((v) => {
+          const text = variantMap[`${v.country}-${v.variant_index}`]
+          if (!text?.trim()) return v
+          return { ...v, layerTexts: { [layerId!]: text } }
+        })
+
+        return { ...slide, layoutConfig, textVariants }
+      })
     }
   }
 
