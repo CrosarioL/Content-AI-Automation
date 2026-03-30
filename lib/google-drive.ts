@@ -53,15 +53,20 @@ function getOAuthDriveClient() {
   return google.drive({ version: 'v3', auth: oAuth2Client })
 }
 
-// Prefer service account (GOOGLE_DRIVE_CREDENTIALS) — never expires, no refresh tokens.
-// Share the target Drive folder with the service account's client_email so files count
-// against your quota rather than the service account's (which has none).
-// OAuth is only used as a fallback when GOOGLE_DRIVE_CREDENTIALS is not set.
+// Prefer OAuth: files are owned by you and count against your quota.
+// Service accounts have no Drive storage quota — uploads fail with quota errors on personal accounts.
+// To prevent OAuth token expiry: publish your OAuth consent screen to Production in Google Cloud Console
+// (APIs & Services → OAuth consent screen → Publish App). Production tokens never expire.
+// Service account is only used as fallback when OAuth vars are not set.
 export function getDriveClient() {
-  if (process.env.GOOGLE_DRIVE_CREDENTIALS) {
-    return getServiceAccountDriveClient()
+  if (
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID &&
+    process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET &&
+    process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN
+  ) {
+    return getOAuthDriveClient()
   }
-  return getOAuthDriveClient()
+  return getServiceAccountDriveClient()
 }
 
 export interface UploadToDriveOptions {
