@@ -19,7 +19,7 @@ import type {
 } from '@/types'
 
 // Translation helper using Google Translate API (free tier)
-async function translateText(text: string, targetLang: 'ar' | 'ms'): Promise<string> {
+async function translateText(text: string, targetLang: 'ar' | 'id'): Promise<string> {
   // If no API key, return original text (user can add Google Translate API key later)
   const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY
   if (!apiKey) {

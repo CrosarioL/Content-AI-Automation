@@ -14,6 +14,11 @@ export interface ParsedSlideText {
   uk_v2: string
   us_v1: string
   us_v2: string
+  // Optional second text block (when variant uses / separator for two layers)
+  uk_v1_b2?: string
+  uk_v2_b2?: string
+  us_v1_b2?: string
+  us_v2_b2?: string
 }
 
 interface ClaudePasteParserProps {
@@ -52,18 +57,36 @@ function parseClaudeOutput(raw: string): ParsedSlideText[] {
 
     // Extract variants — supports two formats:
     // Format A (numbered):  1. *"text"*  /  1. "text"  /  1. text
+    //   Multi-block: 1. *"text block 1"* / *"text block 2"*
     // Format B (plain):     "text"  or bare lines (one per line, 4 lines = uk_v1..us_v2)
     const variants: string[] = []
+    const variantsBlock2: string[] = [] // second text block per variant (if / separator used)
+
+    // Helper: clean a single text fragment
+    const cleanText = (t: string) =>
+      t.replace(/^\*?"?|"?\*?$/g, '').replace(/^["']|["']$/g, '').trim()
+
+    // Helper: split "block1" / "block2" and return [block1, block2?]
+    const splitBlocks = (raw: string): [string, string | undefined] => {
+      // Look for / separator between quoted/asterisked segments
+      const slashMatch = raw.match(/^(.+?)\s*\/\s*(.+)$/)
+      if (slashMatch) {
+        const b1 = cleanText(slashMatch[1])
+        const b2 = cleanText(slashMatch[2])
+        if (b1 && b2) return [b1, b2]
+      }
+      return [cleanText(raw), undefined]
+    }
 
     // Try Format A first: numbered lines
-    const variantRegex = /^\s*(\d+)\.\s*\*{0,1}"?([^*\n]+)"?\*{0,1}\s*$/gm
+    const variantRegex = /^\s*(\d+)\.\s*(.+?)\s*$/gm
     let match
     while ((match = variantRegex.exec(block)) !== null) {
       const variantNum = parseInt(match[1], 10)
-      let text = match[2].trim()
-      text = text.replace(/^\*?"?|"?\*?$/g, '').trim()
-      text = text.replace(/^["']|["']$/g, '').trim()
+      const rawContent = match[2].trim()
+      const [text, text2] = splitBlocks(rawContent)
       variants[variantNum - 1] = text
+      if (text2) variantsBlock2[variantNum - 1] = text2
     }
 
     // Format B fallback: plain quoted or unquoted lines (skip the header line)
@@ -72,9 +95,12 @@ function parseClaudeOutput(raw: string): ParsedSlideText[] {
         .split('\n')
         .map((l) => l.trim())
         .filter((l) => l && !/^(\*{0,2}SLIDE\s+\d+|##\s*SLIDE)/i.test(l)) // skip header
-        .map((l) => l.replace(/^["']|["']$/g, '').trim())                   // strip outer quotes
         .filter(Boolean)
-      lines.forEach((text, i) => { variants[i] = text })
+      lines.forEach((raw, i) => {
+        const [text, text2] = splitBlocks(raw)
+        variants[i] = text
+        if (text2) variantsBlock2[i] = text2
+      })
     }
 
     // Need at least 2 variants
@@ -87,6 +113,10 @@ function parseClaudeOutput(raw: string): ParsedSlideText[] {
       uk_v2: variants[1] || '',
       us_v1: variants[2] || variants[0] || '', // fallback to UK if no US variants
       us_v2: variants[3] || variants[1] || '',
+      uk_v1_b2: variantsBlock2[0],
+      uk_v2_b2: variantsBlock2[1],
+      us_v1_b2: variantsBlock2[2] || variantsBlock2[0],
+      us_v2_b2: variantsBlock2[3] || variantsBlock2[1],
     })
   }
 
@@ -207,18 +237,22 @@ export function ClaudePasteParser({ onParsed, slideCount }: ClaudePasteParserPro
                           <div className="bg-muted/50 rounded p-2">
                             <p className="font-semibold text-primary mb-1">🇬🇧 UK V1</p>
                             <p className="text-foreground">{slide.uk_v1 || <span className="text-muted-foreground italic">empty</span>}</p>
+                            {slide.uk_v1_b2 && <p className="text-foreground mt-1 pt-1 border-t border-border/50 opacity-75">↳ {slide.uk_v1_b2}</p>}
                           </div>
                           <div className="bg-muted/50 rounded p-2">
                             <p className="font-semibold text-primary mb-1">🇬🇧 UK V2</p>
                             <p className="text-foreground">{slide.uk_v2 || <span className="text-muted-foreground italic">empty</span>}</p>
+                            {slide.uk_v2_b2 && <p className="text-foreground mt-1 pt-1 border-t border-border/50 opacity-75">↳ {slide.uk_v2_b2}</p>}
                           </div>
                           <div className="bg-muted/50 rounded p-2">
                             <p className="font-semibold text-blue-500 mb-1">🇺🇸 US V1</p>
                             <p className="text-foreground">{slide.us_v1 || <span className="text-muted-foreground italic">empty</span>}</p>
+                            {slide.us_v1_b2 && <p className="text-foreground mt-1 pt-1 border-t border-border/50 opacity-75">↳ {slide.us_v1_b2}</p>}
                           </div>
                           <div className="bg-muted/50 rounded p-2">
                             <p className="font-semibold text-blue-500 mb-1">🇺🇸 US V2</p>
                             <p className="text-foreground">{slide.us_v2 || <span className="text-muted-foreground italic">empty</span>}</p>
+                            {slide.us_v2_b2 && <p className="text-foreground mt-1 pt-1 border-t border-border/50 opacity-75">↳ {slide.us_v2_b2}</p>}
                           </div>
                         </div>
                         <p className="text-xs text-amber-600 dark:text-amber-400">
