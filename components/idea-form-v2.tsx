@@ -587,48 +587,76 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
       const slideIndex = parsed.slideIndex
       if (slideIndex >= activePersonaData.slides.length) continue
 
-      // Single atomic update per slide — creates a default layer if none exists
+      // Check if any variant has a second text block
+      const hasBlock2 = !!(parsed.uk_v1_b2 || parsed.uk_v2_b2 || parsed.us_v1_b2 || parsed.us_v2_b2)
+
+      // Single atomic update per slide — creates default layers if none exist
       updateSlide(activePersona, slideIndex, (slide) => {
-        // Resolve or create the text layer
-        let layerId = slide.layoutConfig.layers[0]?.id
+        const { canvas, safeZone } = slide.layoutConfig
         let layoutConfig = slide.layoutConfig
 
-        if (!layerId) {
-          layerId = randomId()
-          const { canvas, safeZone } = slide.layoutConfig
-          const defaultLayer: SlideTextLayer = {
-            id: layerId,
-            type: 'text',
-            text: '',
-            fontFamily: 'Inter',
-            fontWeight: '600',
-            fontSize: 52,
-            color: '#FFFFFF',
-            align: 'center',
-            position: { x: 60, y: (safeZone?.top ?? 180) + 40 },
-            size: {
-              width: canvas.width - 120,
-              height: canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80,
-            },
-            rotation: 0,
-            scale: { x: 1, y: 1 },
-            opacity: 1,
-            zIndex: 1,
+        // Helper to create a default text layer
+        const makeDefaultLayer = (id: string, yOffset: number, heightFraction: number, zIdx: number): SlideTextLayer => ({
+          id,
+          type: 'text',
+          text: '',
+          fontFamily: 'Inter',
+          fontWeight: '600',
+          fontSize: 52,
+          color: '#FFFFFF',
+          align: 'center',
+          position: { x: 60, y: (safeZone?.top ?? 180) + 40 + yOffset },
+          size: {
+            width: canvas.width - 120,
+            height: Math.floor((canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80) * heightFraction),
+          },
+          rotation: 0,
+          scale: { x: 1, y: 1 },
+          opacity: 1,
+          zIndex: zIdx,
+        })
+
+        // Ensure we have enough layers
+        const existingLayers = layoutConfig.layers
+        let layer1Id = existingLayers[0]?.id
+        let layer2Id = existingLayers[1]?.id
+
+        if (!layer1Id) {
+          layer1Id = randomId()
+          if (hasBlock2) {
+            // Two layers: split the vertical space
+            layer2Id = randomId()
+            const usableHeight = canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80
+            const layer1 = makeDefaultLayer(layer1Id, 0, 0.45, 1)
+            const layer2 = makeDefaultLayer(layer2Id, Math.floor(usableHeight * 0.55), 0.45, 2)
+            layoutConfig = { ...layoutConfig, layers: [layer1, layer2] }
+          } else {
+            layoutConfig = { ...layoutConfig, layers: [makeDefaultLayer(layer1Id, 0, 1, 1)] }
           }
-          layoutConfig = { ...slide.layoutConfig, layers: [defaultLayer] }
+        } else if (hasBlock2 && !layer2Id) {
+          // Layer 1 exists but need to add layer 2
+          layer2Id = randomId()
+          const usableHeight = canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80
+          const layer2 = makeDefaultLayer(layer2Id, Math.floor(usableHeight * 0.55), 0.45, 2)
+          layoutConfig = { ...layoutConfig, layers: [...layoutConfig.layers, layer2] }
         }
 
-        const variantMap: Record<string, string> = {
-          'uk-1': parsed.uk_v1,
-          'uk-2': parsed.uk_v2,
-          'us-1': parsed.us_v1,
-          'us-2': parsed.us_v2,
+        // Build variant map: each entry maps to { layer1: text, layer2?: text }
+        const variantMap: Record<string, { b1: string; b2?: string }> = {
+          'uk-1': { b1: parsed.uk_v1, b2: parsed.uk_v1_b2 },
+          'uk-2': { b1: parsed.uk_v2, b2: parsed.uk_v2_b2 },
+          'us-1': { b1: parsed.us_v1, b2: parsed.us_v1_b2 },
+          'us-2': { b1: parsed.us_v2, b2: parsed.us_v2_b2 },
         }
 
         const textVariants = slide.textVariants.map((v) => {
-          const text = variantMap[`${v.country}-${v.variant_index}`]
-          if (!text?.trim()) return v
-          return { ...v, layerTexts: { [layerId!]: text } }
+          const entry = variantMap[`${v.country}-${v.variant_index}`]
+          if (!entry?.b1?.trim()) return v
+          const layerTexts: Record<string, string> = { [layer1Id!]: entry.b1 }
+          if (entry.b2 && layer2Id) {
+            layerTexts[layer2Id] = entry.b2
+          }
+          return { ...v, layerTexts }
         })
 
         return { ...slide, layoutConfig, textVariants }
@@ -864,11 +892,11 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
                 onClick={async () => {
                   try {
                     let translated = 0
-                    // Translate ALL slides for this persona, both KSA and Malaysia, all variants
+                    // Translate ALL slides for this persona, both KSA and Indonesian, all variants
                     for (let slideIdx = 0; slideIdx < activePersonaData.slides.length; slideIdx++) {
                       const slide = activePersonaData.slides[slideIdx]
                       for (const targetCountry of ['ksa', 'my'] as const) {
-                        const targetLang = targetCountry === 'ksa' ? 'ar' : 'ms'
+                        const targetLang = targetCountry === 'ksa' ? 'ar' : 'id'
                         for (const variantIndex of [1, 2] as const) {
                           // Find UK text for this variant
                           const ukVariant = slide.textVariants.find(
@@ -1094,7 +1122,7 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
                       className="ml-auto"
                       onClick={async () => {
                         if (!activeSlide) return
-                        const targetLang = activeCountry === 'ksa' ? 'ar' : 'ms'
+                        const targetLang = activeCountry === 'ksa' ? 'ar' : 'id'
                         // Find UK text for this slide and variant
                         const ukVariant = activeSlide.textVariants.find(
                           v => v.country === 'uk' && v.variant_index === activeVariantIndex

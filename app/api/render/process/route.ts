@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       
       // Auto-translate logic:
       // - For KSA: Use USA/UK variant 1, translate to Arabic
-      // - For Malaysia: Use USA/UK variant 2, translate to Malay
+      // - For Malaysia: Use USA/UK variant 2, translate to Indonesian
       // If we don't have a variant for this country, OR if it's KSA/MY where we want to auto-translate
       if ((!textVariant && (job.country === 'ksa' || job.country === 'my')) || 
           (job.country === 'ksa' || job.country === 'my')) {
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
             
             if (sourceVariant) {
               // Found source! Now translate
-              const targetLang = job.country === 'ksa' ? 'ar' : 'ms'
+              const targetLang = job.country === 'ksa' ? 'ar' : 'id'
               
               try {
                 const translatedText = await translateText(sourceVariant.content, targetLang)

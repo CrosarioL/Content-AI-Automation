@@ -13,7 +13,7 @@ export const COUNTRY_LABELS: Record<Country, string> = {
   uk: 'UK',
   us: 'US',
   ksa: 'KSA',
-  my: 'Malaysia',
+  my: 'Indonesian',
 }
 
 export const JOB_STATUS_LABELS = {

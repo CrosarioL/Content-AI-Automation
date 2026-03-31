@@ -1,6 +1,6 @@
 import { decodeHtmlEntities } from './utils'
 
-export async function translateText(text: string, targetLang: 'ar' | 'ms'): Promise<string> {
+export async function translateText(text: string, targetLang: 'ar' | 'id'): Promise<string> {
   const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY
   if (!apiKey) {
     console.warn('GOOGLE_TRANSLATE_API_KEY not set, skipping translation')
