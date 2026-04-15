@@ -12,6 +12,26 @@ import { measureTextLines, getEffectiveWrapWidth, hasArabicScript, isArrowOnlyLi
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
 
+/**
+ * Resolve CSS variables in font-family strings for Konva (HTML5 Canvas).
+ * Canvas cannot interpret var(--font-xxx) — we must resolve them to the
+ * actual font-family value that Next.js Google Fonts registered.
+ */
+function resolveFont(fontFamily: string | undefined): string {
+  if (!fontFamily) return 'Inter'
+  // Strip quotes first
+  let resolved = fontFamily.replace(/['"]/g, '')
+  // Replace any var(--font-xxx) with the computed value
+  if (typeof document !== 'undefined' && resolved.includes('var(')) {
+    resolved = resolved.replace(/var\(([^)]+)\)/g, (_match, varName) => {
+      const val = getComputedStyle(document.documentElement).getPropertyValue(varName.trim())
+      return val ? val.trim().replace(/['"]/g, '') : ''
+    })
+  }
+  // Clean up empty entries and extra commas from failed resolutions
+  return resolved.split(',').map(s => s.trim()).filter(Boolean).join(', ') || 'Inter'
+}
+
 function getBackgroundImageLayout(
   image: HTMLImageElement | null,
   canvasWidth: number,
@@ -124,7 +144,7 @@ export function SlideKonvaPreview({
       const opts = {
         wrapWidth,
         fontSize: layer.fontSize ?? 60,
-        fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter',
+        fontFamily: resolveFont(layer.fontFamily),
         fontWeight: layer.fontWeight || '500',
         lineHeight: layer.lineHeight ?? 1.2,
       }
@@ -156,7 +176,7 @@ export function SlideKonvaPreview({
         text,
         wrapWidth,
         fontSize,
-        fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter',
+        fontFamily: resolveFont(layer.fontFamily),
         fontWeight: layer.fontWeight || '500',
         lineHeight: lh,
       }
@@ -290,7 +310,7 @@ export function SlideKonvaPreview({
                     y={-textTopOffset}
                     width={effectiveBlockWidth}
                     fontSize={fontSize}
-                    fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
+                    fontFamily={resolveFont(layer.fontFamily)}
                     fontStyle={layer.fontWeight || '500'}
                     fill={layer.color || '#ffffff'}
                     align={align}
@@ -309,7 +329,7 @@ export function SlideKonvaPreview({
                       y={-textTopOffset + arrowY}
                       width={effectiveBlockWidth}
                       fontSize={fontSize}
-                      fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
+                      fontFamily={resolveFont(layer.fontFamily)}
                       fontStyle={layer.fontWeight || '500'}
                       fill={layer.color || '#ffffff'}
                       align="center"
