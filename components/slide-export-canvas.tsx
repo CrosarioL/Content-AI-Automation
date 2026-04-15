@@ -14,6 +14,21 @@ import { measureTextLines, getEffectiveWrapWidth, hasArabicScript, isArrowOnlyLi
 const DEFAULT_WIDTH = 1080
 const DEFAULT_HEIGHT = 1920
 
+/**
+ * Resolve CSS variables in font-family strings for Konva (HTML5 Canvas).
+ */
+function resolveFont(fontFamily: string | undefined): string {
+  if (!fontFamily) return 'Inter'
+  let resolved = fontFamily.replace(/['"]/g, '')
+  if (typeof document !== 'undefined' && resolved.includes('var(')) {
+    resolved = resolved.replace(/var\(([^)]+)\)/g, (_match, varName) => {
+      const val = getComputedStyle(document.documentElement).getPropertyValue(varName.trim())
+      return val ? val.trim().replace(/['"]/g, '') : ''
+    })
+  }
+  return resolved.split(',').map(s => s.trim()).filter(Boolean).join(', ') || 'Inter'
+}
+
 function useKonvaImage(url: string | undefined) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   useEffect(() => {
@@ -114,7 +129,7 @@ export function SlideExportCanvas({
         text: textForMetrics,
         wrapWidth,
         fontSize: layer.fontSize ?? 60,
-        fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter',
+        fontFamily: resolveFont(layer.fontFamily),
         fontWeight: layer.fontWeight || '500',
         lineHeight: layer.lineHeight ?? 1.2,
       })
@@ -139,10 +154,10 @@ export function SlideExportCanvas({
       if (hasArrowLastLine) {
         const mainText = lines.slice(0, -1).join('\n')
         const arrowLine = lines[lines.length - 1]
-        const metrics = measureTextLines(measureCtx, { text: mainText, wrapWidth, fontSize, fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter', fontWeight: layer.fontWeight || '500', lineHeight: lh })
+        const metrics = measureTextLines(measureCtx, { text: mainText, wrapWidth, fontSize, fontFamily: resolveFont(layer.fontFamily), fontWeight: layer.fontWeight || '500', lineHeight: lh })
         map.set(layer.id, { mainText, arrowLine, arrowY: metrics.length * fontSize * lh })
       } else if (trailing) {
-        const metrics = measureTextLines(measureCtx, { text: trailing.mainText, wrapWidth, fontSize, fontFamily: layer.fontFamily?.replace(/['"]/g, '') || 'Inter', fontWeight: layer.fontWeight || '500', lineHeight: lh })
+        const metrics = measureTextLines(measureCtx, { text: trailing.mainText, wrapWidth, fontSize, fontFamily: resolveFont(layer.fontFamily), fontWeight: layer.fontWeight || '500', lineHeight: lh })
         map.set(layer.id, { mainText: trailing.mainText, arrowLine: trailing.arrowLine, arrowY: metrics.length * fontSize * lh })
       }
     }
@@ -259,7 +274,7 @@ export function SlideExportCanvas({
                 y={-textTopOffset}
                 width={effectiveBlockWidth}
                 fontSize={fontSize}
-                fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
+                fontFamily={resolveFont(layer.fontFamily)}
                 fontStyle={layer.fontWeight || '500'}
                 fill={layer.color || '#ffffff'}
                 align={align}
@@ -279,7 +294,7 @@ export function SlideExportCanvas({
                   y={-textTopOffset + arrowY}
                   width={effectiveBlockWidth}
                   fontSize={fontSize}
-                  fontFamily={layer.fontFamily?.replace(/['"]/g, '') || 'Inter'}
+                  fontFamily={resolveFont(layer.fontFamily)}
                   fontStyle={layer.fontWeight || '500'}
                   fill={layer.color || '#ffffff'}
                   align="center"
