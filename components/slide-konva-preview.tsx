@@ -261,7 +261,10 @@ export function SlideKonvaPreview({
               const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
               const isRtl = hasArabicScript(text)
               const align = isRtl ? 'right' : (layer.align || 'center')
-              const blockWidth = layer.size?.width ?? wrapWidth
+              // Match the background pills' wrap width (max(size.width, 800)) so
+              // text and pills wrap identically — otherwise longer translations
+              // (Indonesian) wrap narrower than the pills and spill outside them.
+              const blockWidth = wrapWidth
               const effectiveBlockWidth = getEffectiveWrapWidth(text, blockWidth)
 
               return (

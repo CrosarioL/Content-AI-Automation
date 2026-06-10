@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getIdeaWithDetailsV2, getPostInstances } from '@/lib/db'
 import { buildLayoutForSlide, getEffectiveSlideChoices } from '@/lib/export-build-layouts'
 import type { ExportPreparePayload, ExportPostItem, ExportSlideItem } from '@/lib/export-build-layouts'
+import { findOrCreateDriveFolder } from '@/lib/google-drive'
 
 export async function POST(
   request: NextRequest,
@@ -24,6 +25,17 @@ export async function POST(
       return NextResponse.json({ error: 'Idea not found' }, { status: 404 })
     }
 
+    // Auto-create a Drive subfolder named EXACTLY the idea title (e.g.
+    // "Main - 10 Things About Allah That Will Make You Tear Up") so exports land
+    // in a correctly-named folder instead of a flat dump with sanitized names.
+    let targetFolderId = folderId
+    try {
+      const ideaFolder = await findOrCreateDriveFolder({ name: idea.title, parentFolderId: folderId })
+      targetFolderId = ideaFolder.folderId
+    } catch (e) {
+      console.error('[export/prepare] Could not create idea folder; using parent folder:', e)
+    }
+
     const posts = await getPostInstances({ ideaId })
     if (posts.length === 0) {
       return NextResponse.json({ error: 'No posts found. Generate posts first.' }, { status: 400 })
@@ -40,7 +52,7 @@ export async function POST(
 
     const payload: ExportPreparePayload = {
       ideaTitle: idea.title,
-      folderId,
+      folderId: targetFolderId,
       posts: [],
     }
 

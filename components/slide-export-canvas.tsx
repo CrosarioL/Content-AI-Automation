@@ -221,7 +221,12 @@ export function SlideExportCanvas({
           const lineMetrics = hasBackground ? (lineMetricsByLayer.get(layer.id) ?? []) : []
           const isRtl = hasArabicScript(text)
           const align = isRtl ? 'right' : (layer.align || 'center')
-          const blockWidth = layer.size?.width ?? wrapWidth
+          // Must match the wrap width used for the per-line background pills
+          // (wrapWidth = max(size.width, 800)). If the text wrapped at the raw
+          // size.width (often 700) it would break into more/narrower lines than
+          // the pills were sized for, so longer translations (Indonesian) spill
+          // outside the background. Keep both in lock-step.
+          const blockWidth = wrapWidth
           const effectiveBlockWidth = getEffectiveWrapWidth(text, blockWidth)
 
           return (

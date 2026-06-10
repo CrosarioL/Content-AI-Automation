@@ -109,8 +109,6 @@ export function useClientExportToDrive(ideaId: string) {
         }
       }
 
-      const ideaSlug = sanitizeFilename(payload.ideaTitle)
-
       // Upload ONE country at a time. Uploading all 4 in parallel makes the
       // server buffer 4 full zips in memory at once, which OOM-crashes the
       // host (502) — UK/UAE would finish but USA/Indonesia got killed.
@@ -123,7 +121,9 @@ export function useClientExportToDrive(ideaId: string) {
 
         const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })
         const formData = new FormData()
-        formData.append('file', zipBlob, `${ideaSlug}-${countryLabel}.zip`)
+        // Folder is already named after the idea, so the zip just needs the
+        // country label (e.g. "US.zip") — no sanitized idea prefix.
+        formData.append('file', zipBlob, `${countryLabel}.zip`)
         formData.append('ideaTitle', payload.ideaTitle)
         formData.append('folderId', payload.folderId)
 
