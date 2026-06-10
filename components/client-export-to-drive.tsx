@@ -109,24 +109,46 @@ export function useClientExportToDrive(ideaId: string) {
         }
       }
 
-      setProgress('Uploading to Drive...')
       const ideaSlug = sanitizeFilename(payload.ideaTitle)
-      const uploadPromises = countries.map(async (country) => {
+
+      // Upload ONE country at a time. Uploading all 4 in parallel makes the
+      // server buffer 4 full zips in memory at once, which OOM-crashes the
+      // host (502) — UK/UAE would finish but USA/Indonesia got killed.
+      const failedCountries: string[] = []
+      for (let i = 0; i < countries.length; i++) {
+        const country = countries[i]
         const zip = countryZips.get(country)!
         const countryLabel = COUNTRY_LABELS[country as keyof typeof COUNTRY_LABELS] || country.toUpperCase()
+        setProgress(`Uploading ${countryLabel} (${i + 1}/${countries.length})...`)
+
         const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })
         const formData = new FormData()
         formData.append('file', zipBlob, `${ideaSlug}-${countryLabel}.zip`)
         formData.append('ideaTitle', payload.ideaTitle)
         formData.append('folderId', payload.folderId)
-        return fetch(`/api/ideas/${ideaId}/export/drive-upload`, { method: 'POST', body: formData })
-      })
 
-      const uploadResults = await Promise.all(uploadPromises)
-      const failed = uploadResults.filter((r) => !r.ok)
-      if (failed.length > 0) {
-        const d = await failed[0].json().catch(() => ({}))
-        throw new Error(d.error || 'Upload failed')
+        // Retry once per country in case of a transient gateway/network blip.
+        let ok = false
+        let lastErr = ''
+        for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+          try {
+            const res = await fetch(`/api/ideas/${ideaId}/export/drive-upload`, { method: 'POST', body: formData })
+            if (res.ok) {
+              ok = true
+              break
+            }
+            const d = await res.json().catch(() => ({}))
+            lastErr = d.error || `HTTP ${res.status}`
+          } catch (e: any) {
+            lastErr = e?.message || 'network error'
+          }
+          if (!ok && attempt < 2) await new Promise((r) => setTimeout(r, 1500))
+        }
+        if (!ok) failedCountries.push(`${countryLabel} (${lastErr})`)
+      }
+
+      if (failedCountries.length > 0) {
+        throw new Error(`Upload failed for: ${failedCountries.join(', ')}`)
       }
 
       const folderLink = `https://drive.google.com/drive/folders/${payload.folderId}`
