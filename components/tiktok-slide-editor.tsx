@@ -90,7 +90,8 @@ const defaultLayer = (text: string, canvasWidth: number = 1080, canvasHeight: nu
   color: '#ffffff',
   background: 'transparent',
   align: 'center',
-  position: { x: canvasWidth / 2 - 500, y: canvasHeight / 2 - 100 },
+  // position is the layer's CENTER point — start dead-centre of the canvas
+  position: { x: canvasWidth / 2, y: canvasHeight / 2 },
   size: { width: 1000, height: 200 }, // TikTok-style: ~20+ chars per line before wrap
   rotation: 0,
   scale: { x: 1.5, y: 1.5 },

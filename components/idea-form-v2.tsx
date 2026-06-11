@@ -583,9 +583,25 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
   // ============================================
 
   const handleParsedScript = (parsedSlides: ParsedSlideText[]) => {
+    // If the pasted script references more slides than currently exist
+    // (base is 7), auto-create the missing ones instead of dropping them.
+    const maxSlideIndex = parsedSlides.reduce((max, p) => Math.max(max, p.slideIndex), -1)
+    if (maxSlideIndex >= activePersonaData.slides.length) {
+      updatePersonas((prev) =>
+        prev.map((persona) => {
+          if (persona.persona_type !== activePersona) return persona
+          const slides = [...persona.slides]
+          while (slides.length <= maxSlideIndex) {
+            slides.push(createSlideV2(slides.length + 1, aspectRatio))
+          }
+          return { ...persona, slides }
+        })
+      )
+    }
+
     for (const parsed of parsedSlides) {
       const slideIndex = parsed.slideIndex
-      if (slideIndex >= activePersonaData.slides.length) continue
+      if (slideIndex > 100) continue // sanity cap only — slides above are auto-created
 
       // Check if any variant has a second text block
       const hasBlock2 = !!(parsed.uk_v1_b2 || parsed.uk_v2_b2 || parsed.us_v1_b2 || parsed.us_v2_b2)
@@ -595,25 +611,37 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
         const { canvas, safeZone } = slide.layoutConfig
         let layoutConfig = slide.layoutConfig
 
-        // Helper to create a default text layer
-        const makeDefaultLayer = (id: string, yOffset: number, heightFraction: number, zIdx: number): SlideTextLayer => ({
+        // Helper to create a default text layer.
+        // position is the layer's CENTER; start centred with the TikTok Classic preset
+        // (same styling as the editor's defaultLayer) instead of unstyled Inter at top-left.
+        const makeDefaultLayer = (id: string, yCenterFraction: number, heightFraction: number, zIdx: number): SlideTextLayer => ({
           id,
           type: 'text',
           text: '',
-          fontFamily: 'Inter',
-          fontWeight: '600',
-          fontSize: 52,
-          color: '#FFFFFF',
+          fontFamily: '"TikTok Sans", "TikTok Sans Text", system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+          fontWeight: '500',
+          fontSize: 60,
+          color: '#ffffff',
+          background: 'transparent',
           align: 'center',
-          position: { x: 60, y: (safeZone?.top ?? 180) + 40 + yOffset },
+          position: { x: canvas.width / 2, y: Math.floor(canvas.height * yCenterFraction) },
           size: {
-            width: canvas.width - 120,
+            width: 1000,
             height: Math.floor((canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80) * heightFraction),
           },
           rotation: 0,
-          scale: { x: 1, y: 1 },
+          scale: { x: 1.5, y: 1.5 },
           opacity: 1,
           zIndex: zIdx,
+          strokeColor: '#000000',
+          strokeWidth: 10,
+          shadowColor: 'rgba(0,0,0,0.3)',
+          shadowBlur: 1,
+          shadowOffsetX: 2,
+          shadowOffsetY: 2,
+          letterSpacing: 2,
+          lineHeight: 1.05,
+          preset: 'tiktok-classic',
         })
 
         // Ensure we have enough layers
@@ -624,20 +652,19 @@ export function IdeaFormV2({ mode, ideaId, initialIdea }: IdeaFormV2Props) {
         if (!layer1Id) {
           layer1Id = randomId()
           if (hasBlock2) {
-            // Two layers: split the vertical space
+            // Two layers: upper and lower thirds, both horizontally centred
             layer2Id = randomId()
-            const usableHeight = canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80
-            const layer1 = makeDefaultLayer(layer1Id, 0, 0.45, 1)
-            const layer2 = makeDefaultLayer(layer2Id, Math.floor(usableHeight * 0.55), 0.45, 2)
+            const layer1 = makeDefaultLayer(layer1Id, 0.35, 0.45, 1)
+            const layer2 = makeDefaultLayer(layer2Id, 0.65, 0.45, 2)
             layoutConfig = { ...layoutConfig, layers: [layer1, layer2] }
           } else {
-            layoutConfig = { ...layoutConfig, layers: [makeDefaultLayer(layer1Id, 0, 1, 1)] }
+            // Single layer: dead centre of the canvas
+            layoutConfig = { ...layoutConfig, layers: [makeDefaultLayer(layer1Id, 0.5, 1, 1)] }
           }
         } else if (hasBlock2 && !layer2Id) {
-          // Layer 1 exists but need to add layer 2
+          // Layer 1 exists but need to add layer 2 (lower third)
           layer2Id = randomId()
-          const usableHeight = canvas.height - (safeZone?.top ?? 180) - (safeZone?.bottom ?? 220) - 80
-          const layer2 = makeDefaultLayer(layer2Id, Math.floor(usableHeight * 0.55), 0.45, 2)
+          const layer2 = makeDefaultLayer(layer2Id, 0.65, 0.45, 2)
           layoutConfig = { ...layoutConfig, layers: [...layoutConfig.layers, layer2] }
         }
 
